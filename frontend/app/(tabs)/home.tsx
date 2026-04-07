@@ -43,6 +43,12 @@ export default function HomeScreen() {
       return;
     }
 
+    // Validate that return date is after departure date
+    if (returnDate <= departureDate) {
+      alert('La fecha de regreso debe ser después de la fecha de salida');
+      return;
+    }
+
     setIsSearching(true);
     setDates(departureDate, returnDate);
     setMood(currentMood);
@@ -58,7 +64,35 @@ export default function HomeScreen() {
     setCurrentMood(moodId);
   };
 
-  const canSearch = departureDate && returnDate && currentMood;
+  const handleDepartureDateChange = (event: any, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDeparturePicker(false);
+    }
+    
+    if (event.type === 'set' && date) {
+      setDepartureDate(date);
+      // If return date is before new departure date, clear it
+      if (returnDate && returnDate <= date) {
+        setReturnDate(null);
+      }
+    } else if (event.type === 'dismissed') {
+      setShowDeparturePicker(false);
+    }
+  };
+
+  const handleReturnDateChange = (event: any, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowReturnPicker(false);
+    }
+    
+    if (event.type === 'set' && date) {
+      setReturnDate(date);
+    } else if (event.type === 'dismissed') {
+      setShowReturnPicker(false);
+    }
+  };
+
+  const canSearch = departureDate && returnDate && currentMood && returnDate > departureDate;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -179,30 +213,95 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Date Pickers */}
-      {showDeparturePicker && (
+      {/* Date Pickers - Android */}
+      {Platform.OS === 'android' && showDeparturePicker && (
         <DateTimePicker
           value={departureDate || new Date()}
           mode="date"
           display="default"
           minimumDate={new Date()}
-          onChange={(event, date) => {
-            setShowDeparturePicker(Platform.OS === 'ios');
-            if (date) setDepartureDate(date);
-          }}
+          onChange={handleDepartureDateChange}
         />
       )}
-      {showReturnPicker && (
+      {Platform.OS === 'android' && showReturnPicker && (
         <DateTimePicker
-          value={returnDate || new Date()}
+          value={returnDate || departureDate || new Date()}
           mode="date"
           display="default"
           minimumDate={departureDate || new Date()}
-          onChange={(event, date) => {
-            setShowReturnPicker(Platform.OS === 'ios');
-            if (date) setReturnDate(date);
-          }}
+          onChange={handleReturnDateChange}
         />
+      )}
+
+      {/* Date Pickers - iOS Modal */}
+      {Platform.OS === 'ios' && showDeparturePicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showDeparturePicker}
+          onRequestClose={() => setShowDeparturePicker(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowDeparturePicker(false)}
+          >
+            <View style={styles.datePickerModal}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={() => setShowDeparturePicker(false)}>
+                  <Text style={styles.datePickerButton}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>Fecha de salida</Text>
+                <TouchableOpacity onPress={() => setShowDeparturePicker(false)}>
+                  <Text style={[styles.datePickerButton, styles.datePickerButtonDone]}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={departureDate || new Date()}
+                mode="date"
+                display="spinner"
+                minimumDate={new Date()}
+                onChange={handleDepartureDateChange}
+                textColor="#FFFFFF"
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {Platform.OS === 'ios' && showReturnPicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showReturnPicker}
+          onRequestClose={() => setShowReturnPicker(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowReturnPicker(false)}
+          >
+            <View style={styles.datePickerModal}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={() => setShowReturnPicker(false)}>
+                  <Text style={styles.datePickerButton}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>Fecha de regreso</Text>
+                <TouchableOpacity onPress={() => setShowReturnPicker(false)}>
+                  <Text style={[styles.datePickerButton, styles.datePickerButtonDone]}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={returnDate || departureDate || new Date()}
+                mode="date"
+                display="spinner"
+                minimumDate={departureDate || new Date()}
+                onChange={handleReturnDateChange}
+                textColor="#FFFFFF"
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
       )}
     </SafeAreaView>
   );
@@ -386,5 +485,38 @@ const styles = StyleSheet.create({
     ...Typography.bodySemibold,
     color: Colors.white,
     fontSize: 14,
+  },
+  // Date Picker Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  datePickerModal: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    paddingBottom: Spacing.xl,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceMid,
+  },
+  datePickerTitle: {
+    ...Typography.h3,
+    color: Colors.onSurface,
+  },
+  datePickerButton: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurfaceDim,
+    fontSize: 16,
+  },
+  datePickerButtonDone: {
+    color: Colors.coral,
   },
 });
