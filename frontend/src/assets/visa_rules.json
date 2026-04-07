@@ -1,0 +1,12 @@
+{
+  "FR": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "TN", "RS", "ME", "AL", "MK", "BA"],
+  "ES": ["PT", "FR", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "TN", "RS", "ME", "AL", "MK", "BA"],
+  "DE": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "TN", "RS", "ME", "AL", "MK", "BA"],
+  "IT": ["PT", "ES", "FR", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "TN", "RS", "ME", "AL", "MK", "BA"],
+  "CO": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "RS", "ME", "AL", "MK", "BA"],
+  "BR": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "RS", "ME", "AL", "MK", "BA"],
+  "MX": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "RS", "ME", "AL", "MK", "BA"],
+  "MA": ["PT", "ES", "FR", "IT", "TR", "TN", "EG"],
+  "US": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "RS", "ME", "AL", "MK", "BA"],
+  "GB": ["PT", "ES", "IT", "GR", "HR", "MT", "CY", "RO", "BG", "TR", "MA", "RS", "ME", "AL", "MK", "BA"]
+}

@@ -1,21 +1,31 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Wander",
+    "slug": "wander",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "wander",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wander.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Captura fotos de tus viajes",
+        "NSPhotoLibraryUsageDescription": "Comparte fotos de destinos en tu perfil"
+      }
     },
     "android": {
+      "package": "com.wander.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#0D0D0D"
       },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -31,7 +41,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#0D0D0D"
         }
       ]
     ],
