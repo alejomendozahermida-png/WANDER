@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../src/components/Button';
 import { useUserStore } from '../src/store/userStore';
+import { supabase } from '../src/services/supabase';
 import { Colors, Spacing, BorderRadius, Typography } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,27 +44,44 @@ export default function RegisterScreen() {
 
     setLoading(true);
     
-    // TODO: Replace with Supabase auth
-    setTimeout(() => {
-      const mockUser = {
-        id: Date.now().toString(),
-        email,
-        firstName: '',
-        nationality: '',
-        passportCountry: '',
-        homeAirportIata: '',
-        homeCity: '',
-        budgetMin: 50,
-        budgetMax: 500,
-        travelStyle: [],
-        travelsAlone: false,
-        onboardingComplete: false,
-      };
-      
-      setUser(mockUser);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // The profile will be automatically created by the trigger
+        // Set minimal user data and redirect to onboarding
+        const userData = {
+          id: data.user.id,
+          email: data.user.email || '',
+          firstName: '',
+          nationality: '',
+          passportCountry: '',
+          homeAirportIata: '',
+          homeCity: '',
+          budgetMin: 50,
+          budgetMax: 500,
+          travelStyle: [],
+          travelsAlone: false,
+          onboardingComplete: false,
+        };
+
+        setUser(userData);
+        setLoading(false);
+        router.replace('/onboarding');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Error al crear la cuenta');
       setLoading(false);
-      router.replace('/onboarding');
-    }, 1500);
+    }
   };
 
   return (

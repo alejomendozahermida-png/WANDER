@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../src/components/Button';
 import { useUserStore } from '../src/store/userStore';
+import { supabase } from '../src/services/supabase';
 import { Colors, Spacing, BorderRadius, Typography } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -32,28 +33,57 @@ export default function LoginScreen() {
 
     setLoading(true);
     
-    // TODO: Replace with Supabase auth when keys are available
-    setTimeout(() => {
-      // Mock login - create a mock user
-      const mockUser = {
-        id: '1',
-        email,
-        firstName: 'Usuario',
-        nationality: 'ES',
-        passportCountry: 'ES',
-        homeAirportIata: 'MAD',
-        homeCity: 'Madrid',
-        budgetMin: 100,
-        budgetMax: 400,
-        travelStyle: ['culture', 'party'],
-        travelsAlone: false,
-        onboardingComplete: false,
-      };
-      
-      setUser(mockUser);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Fetch user profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile) {
+          const userData = {
+            id: profile.id,
+            email: data.user.email || '',
+            firstName: profile.first_name || '',
+            nationality: profile.nationality || '',
+            passportCountry: profile.passport_country || '',
+            homeAirportIata: profile.home_airport_iata || '',
+            homeCity: profile.home_city || '',
+            budgetMin: profile.budget_min || 50,
+            budgetMax: profile.budget_max || 500,
+            travelStyle: profile.travel_style || [],
+            travelsAlone: profile.travels_alone || false,
+            onboardingComplete: profile.onboarding_complete || false,
+          };
+
+          setUser(userData);
+
+          // Redirect based on onboarding status
+          if (userData.onboardingComplete) {
+            router.replace('/(tabs)/home');
+          } else {
+            router.replace('/onboarding');
+          }
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Error al iniciar sesión');
+    } finally {
       setLoading(false);
-      router.replace('/onboarding');
-    }, 1500);
+    }
   };
 
   const handleGoogleLogin = () => {

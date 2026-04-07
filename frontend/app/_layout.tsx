@@ -3,19 +3,12 @@ import { useEffect } from 'react';
 import { useUserStore } from '../src/store/userStore';
 
 export default function RootLayout() {
-  const { isLoading } = useUserStore();
+  const { checkSession } = useUserStore();
 
-  // TODO: Check session on mount when Supabase is connected
   useEffect(() => {
-    // Simulate session check for now
-    setTimeout(() => {
-      useUserStore.getState().setUser(null);
-    }, 1000);
+    // Check for existing session on mount
+    checkSession();
   }, []);
-
-  if (isLoading) {
-    return null; // Could show splash screen here
-  }
 
   return (
     <Stack
