@@ -62,20 +62,25 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleComplete = () => {
-    updateProfile({
-      firstName,
-      nationality,
-      passportCountry,
-      homeCity: homeAirport?.city || homeCity,
-      homeAirportIata: homeAirport?.iata || '',
-      budgetMin,
-      budgetMax,
-      travelStyle: selectedVibes,
-      travelsAlone,
-      onboardingComplete: true,
-    });
-    router.replace('/(tabs)/home');
+  const handleComplete = async () => {
+    try {
+      await updateProfile({
+        firstName,
+        nationality,
+        passportCountry,
+        homeCity: homeAirport?.city || homeCity,
+        homeAirportIata: homeAirport?.iata || '',
+        budgetMin,
+        budgetMax,
+        travelStyle: selectedVibes,
+        travelsAlone,
+        onboardingComplete: true,
+      });
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('Error al guardar el perfil. Por favor intenta de nuevo.');
+    }
   };
 
   const toggleVibe = (vibeId: string) => {
