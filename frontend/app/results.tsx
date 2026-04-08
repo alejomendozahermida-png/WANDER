@@ -59,6 +59,20 @@ export default function ResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Conectando con aerolíneas...');
 
+  // Skeleton pulse animation - must be at top level (hooks rules)
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    if (!loading) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [loading]);
+
   useEffect(() => {
     loadResults();
   }, []);
@@ -107,18 +121,6 @@ export default function ResultsScreen() {
   };
 
   const renderLoadingSkeleton = () => {
-    const pulseAnim = useRef(new Animated.Value(0.4)).current;
-    useEffect(() => {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
-        ])
-      );
-      pulse.start();
-      return () => pulse.stop();
-    }, []);
-
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>{loadingMessage}</Text>
