@@ -33,9 +33,22 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (!currentUser) return;
 
     try {
+      // Convert camelCase to snake_case for database
+      const dbUpdates: any = {};
+      if (updates.firstName !== undefined) dbUpdates.first_name = updates.firstName;
+      if (updates.nationality !== undefined) dbUpdates.nationality = updates.nationality;
+      if (updates.passportCountry !== undefined) dbUpdates.passport_country = updates.passportCountry;
+      if (updates.homeAirportIata !== undefined) dbUpdates.home_airport_iata = updates.homeAirportIata;
+      if (updates.homeCity !== undefined) dbUpdates.home_city = updates.homeCity;
+      if (updates.budgetMin !== undefined) dbUpdates.budget_min = updates.budgetMin;
+      if (updates.budgetMax !== undefined) dbUpdates.budget_max = updates.budgetMax;
+      if (updates.travelStyle !== undefined) dbUpdates.travel_style = updates.travelStyle;
+      if (updates.travelsAlone !== undefined) dbUpdates.travels_alone = updates.travelsAlone;
+      if (updates.onboardingComplete !== undefined) dbUpdates.onboarding_complete = updates.onboardingComplete;
+
       const { error } = await supabase
         .from('profiles')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', currentUser.id);
 
       if (error) throw error;
