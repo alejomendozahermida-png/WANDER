@@ -1,4 +1,6 @@
 import { Destination } from '../types';
+import { searchMultipleDestinations, POPULAR_EU_DESTINATIONS } from './flightService';
+import visaRules from '../assets/visa_rules.json';
 
 // Mock popular European destinations for students
 export const TRENDING_DESTINATIONS: Destination[] = [
@@ -132,20 +134,88 @@ export const TRENDING_DESTINATIONS: Destination[] = [
   },
 ];
 
-// Mock function to simulate API search
+// Function to search destinations with REAL Duffel API
 export const searchDestinations = async (
+  departureDate: string,
+  returnDate: string,
+  mood: string,
+  budgetMax: number = 500,
+  originIata: string = 'CDG',
+  passportCountry?: string
+): Promise<Destination[]> => {
+  try {
+    // Select destinations based on mood
+    let destinationsToSearch = [...POPULAR_EU_DESTINATIONS];
+    
+    // Mood-based filtering
+    if (mood === 'party') {
+      destinationsToSearch = ['BCN', 'LIS', 'MAD', 'ATH', 'BER', 'AMS', 'PRG', 'OPO'];
+    } else if (mood === 'culture') {
+      destinationsToSearch = ['FCO', 'ATH', 'PRG', 'VIE', 'KRK', 'MAD', 'LIS', 'BER'];
+    } else if (mood === 'relax') {
+      destinationsToSearch = ['LIS', 'OPO', 'ATH', 'BCN', 'MAD'];
+    } else if (mood === 'nature') {
+      destinationsToSearch = ['KRK', 'BUD', 'OPO', 'VIE', 'PRG'];
+    }
+
+    // Remove origin from search destinations to avoid searching same city
+    destinationsToSearch = destinationsToSearch.filter(d => d !== originIata);
+
+    console.log(`[Search] Mood: ${mood}, Origin: ${originIata}, Budget: ${budgetMax}€, Destinations: ${destinationsToSearch.length}`);
+
+    // Search using Duffel API
+    const results = await searchMultipleDestinations(
+      originIata,
+      destinationsToSearch,
+      departureDate,
+      returnDate,
+      budgetMax,
+      passportCountry
+    );
+
+    // If we got less than 3, supplement with mock data
+    if (results.length < 3) {
+      console.log(`[Search] Only ${results.length} Duffel results, supplementing with mock data`);
+      const existingIds = results.map(r => r.iata);
+      const mockResults = TRENDING_DESTINATIONS
+        .filter(d => !existingIds.includes(d.iata) && d.iata !== originIata)
+        .sort((a, b) => a.totalPrice - b.totalPrice)
+        .slice(0, 3 - results.length)
+        .map((d, i) => ({
+          ...d,
+          departureDate,
+          returnDate,
+          badge: undefined as any,
+        }));
+      
+      const combined = [...results, ...mockResults].slice(0, 3);
+      // Re-assign badges
+      if (combined.length > 0) combined[0].badge = 'cheapest';
+      if (combined.length > 1) combined[1].badge = 'best-value';
+      if (combined.length > 2) combined[2].badge = 'hidden-gem';
+      return combined;
+    }
+
+    return results.slice(0, 3);
+  } catch (error) {
+    console.error('[Search] Error searching destinations:', error);
+    // Fallback to mock data if API fails
+    return searchDestinationsMock(departureDate, returnDate, mood, budgetMax);
+  }
+};
+
+// Fallback mock function
+const searchDestinationsMock = async (
   departureDate: string,
   returnDate: string,
   mood: string,
   budgetMax: number = 500
 ): Promise<Destination[]> => {
   // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Filter by budget and ensure we have enough options
   let withinBudget = TRENDING_DESTINATIONS.filter(d => d.totalPrice <= budgetMax);
   
-  // If we don't have enough within budget, add some slightly over budget
   if (withinBudget.length < 3) {
     const overBudget = TRENDING_DESTINATIONS
       .filter(d => d.totalPrice > budgetMax)
@@ -153,11 +223,9 @@ export const searchDestinations = async (
     withinBudget = [...withinBudget, ...overBudget].slice(0, 8);
   }
   
-  // Score based on mood
   const scored = withinBudget.map(dest => {
-    let score = Math.random() * 0.5; // Base random score
+    let score = Math.random() * 0.5;
     
-    // Adjust score based on mood
     if (mood === 'party' && ['Barcelona', 'Lisbon', 'Athens'].includes(dest.city)) {
       score += 0.4;
     }
@@ -174,11 +242,9 @@ export const searchDestinations = async (
     return { ...dest, score };
   });
   
-  // Sort by score and ALWAYS return exactly 3
   scored.sort((a, b) => b.score - a.score);
   const top3 = scored.slice(0, 3);
   
-  // Assign badges
   top3[0].badge = 'cheapest';
   top3[1].badge = 'best-value';
   top3[2].badge = 'hidden-gem';

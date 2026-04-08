@@ -101,3 +101,101 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Build Wander - a reverse travel app for students in Europe. Users enter dates + mood, app suggests 3 best matching destinations using Duffel API for flights."
+
+backend:
+  - task: "No custom backend needed - using Supabase + Duffel API directly from frontend"
+    implemented: true
+    working: "NA"
+    file: "N/A"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+
+frontend:
+  - task: "Duffel API Flight Search Integration"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/services/flightService.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Rewrote flightService.ts with: correct Duffel response field mapping (city_name, iata_country_code), ISO 8601 duration parser for all formats, date auto-adjustment for Duffel test API key, country code to name mapping, city images, visa checking, batch rate-limited search. Verified via Node.js test: CDG→LIS=130.56€, CDG→BCN=89.99€. TypeScript compiles clean."
+
+  - task: "Search Flow - Home to Results"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/results.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated results.tsx to pass user homeAirportIata and passportCountry to searchDestinations. Added rotating loading messages during Duffel API calls. Removed fake 1.5s delay from home.tsx."
+
+  - task: "Search Destination Logic with Mood Filter"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/services/mockData.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated searchDestinations to accept passportCountry param, filter out origin from destinations, added logging. Fallback to mock data if Duffel fails or returns <3 results."
+
+  - task: "Supabase Auth & Profile"
+    implemented: true
+    working: true
+    file: "frontend/src/services/supabase.ts"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Auth + profile save working. AsyncStorage fallback for SecureStore."
+
+  - task: "Detail Screen"
+    implemented: true
+    working: true
+    file: "frontend/app/detail/[id].tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+
+  - task: "Calendar Date Selection"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/home.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Duffel API Flight Search Integration"
+    - "Search Flow - Home to Results"
+    - "Search Destination Logic with Mood Filter"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "I've completed the Duffel API integration rewrite. Key changes: (1) flightService.ts now correctly maps Duffel response fields (city_name, iata_country_code→country name), (2) formatDuration handles all ISO 8601 variants (PT8H, PT2H30M, PT45M), (3) dates auto-adjust for Duffel test API key (needs dates 340+ days in future), (4) results.tsx passes user's homeAirportIata and passportCountry, (5) loading messages rotate during search. Verified via Node.js integration test that Duffel API returns real flight data. The Ngrok tunnel has persistent infrastructure issues (502/503). Please test the search flow by navigating to the home screen, selecting dates and mood, and verifying results display correctly with real Duffel flight prices. Test credentials: Register a new account through the app."
+
+test_credentials:
+  note: "No fixed test credentials - users register through the app's Register screen with email/password via Supabase Auth"

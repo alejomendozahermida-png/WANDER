@@ -7,9 +7,20 @@ import { Platform } from 'react-native';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Safe storage that works during SSR/static export (no window available)
+const isSSR = typeof window === 'undefined';
+
+const noopStorage = {
+  getItem: async (_key: string) => null,
+  setItem: async (_key: string, _value: string) => {},
+  removeItem: async (_key: string) => {},
+};
+
+const webStorage = isSSR ? noopStorage : AsyncStorage;
+
 // Use AsyncStorage for web/development, SecureStore for native builds
 const storage = Platform.OS === 'web' 
-  ? AsyncStorage 
+  ? webStorage 
   : {
       getItem: async (key: string) => {
         try {

@@ -36,7 +36,6 @@ export default function HomeScreen() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMode, setCalendarMode] = useState<'departure' | 'return'>('departure');
   const [currentMood, setCurrentMood] = useState<string | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
 
   const handleDateSelect = (day: any) => {
     const selectedDate = new Date(day.dateString);
@@ -96,15 +95,11 @@ export default function HomeScreen() {
       return;
     }
 
-    setIsSearching(true);
     setDates(departureDate, returnDate);
     setMood(currentMood);
 
-    // Simulate search delay
-    setTimeout(() => {
-      setIsSearching(false);
-      router.push('/results');
-    }, 1500);
+    // Navigate to results immediately — loading happens there
+    router.push('/results');
   };
 
   const handleMoodSelect = (moodId: string) => {
@@ -192,7 +187,6 @@ export default function HomeScreen() {
             title="Encontrar mi viaje →"
             onPress={handleSearch}
             disabled={!canSearch}
-            loading={isSearching}
             style={styles.searchButton}
           />
         </View>

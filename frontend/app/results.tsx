@@ -56,6 +56,7 @@ export default function ResultsScreen() {
   const { user } = useUserStore();
   const { departureDate, returnDate, selectedMood, results, setResults, setSearching } = useSearchStore();
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Conectando con aerolíneas...');
 
   useEffect(() => {
     loadResults();
@@ -70,17 +71,34 @@ export default function ResultsScreen() {
     setLoading(true);
     setSearching(true);
 
+    // Rotate loading messages for better UX during long API calls
+    const messages = [
+      'Conectando con aerolíneas...',
+      'Buscando vuelos baratos...',
+      'Comparando precios...',
+      'Filtrando por tu presupuesto...',
+      'Casi listo, encontrando las mejores opciones...',
+    ];
+    let msgIdx = 0;
+    const msgInterval = setInterval(() => {
+      msgIdx = Math.min(msgIdx + 1, messages.length - 1);
+      setLoadingMessage(messages[msgIdx]);
+    }, 6000);
+
     try {
       const destinations = await searchDestinations(
         format(departureDate, 'yyyy-MM-dd'),
         format(returnDate, 'yyyy-MM-dd'),
         selectedMood,
-        user?.budgetMax || 500
+        user?.budgetMax || 500,
+        user?.homeAirportIata || 'CDG',
+        user?.passportCountry
       );
       setResults(destinations);
     } catch (error) {
       console.error('Error loading results:', error);
     } finally {
+      clearInterval(msgInterval);
       setLoading(false);
       setSearching(false);
     }
@@ -89,7 +107,8 @@ export default function ResultsScreen() {
   const renderLoadingSkeleton = () => (
     <View style={styles.loadingContainer}>
       <ActivityIndicator size="large" color={Colors.coral} />
-      <Text style={styles.loadingText}>Buscando los mejores destinos...</Text>
+      <Text style={styles.loadingText}>{loadingMessage}</Text>
+      <Text style={styles.loadingSubtext}>Esto puede tomar unos segundos</Text>
     </View>
   );
 
@@ -261,6 +280,13 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.onSurfaceDim,
     marginTop: Spacing.lg,
+  },
+  loadingSubtext: {
+    ...Typography.body,
+    color: Colors.onSurfaceDim,
+    marginTop: Spacing.sm,
+    fontSize: 13,
+    opacity: 0.7,
   },
   scrollView: {
     flex: 1,
