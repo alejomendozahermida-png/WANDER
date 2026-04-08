@@ -9,6 +9,8 @@ import {
   Dimensions,
   Alert,
   Switch,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +23,7 @@ import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Destination } from '../../src/types';
+import { searchAccommodations, Accommodation } from '../../src/services/dealsService';
 
 const { height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.4;
@@ -33,14 +36,39 @@ export default function DetailScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [insuranceEnabled, setInsuranceEnabled] = useState(false);
   const [esimEnabled, setEsimEnabled] = useState(false);
+  const [accommodations, setAccommodations] = useState<{ budget: Accommodation | null; midrange: Accommodation | null; premium: Accommodation | null } | null>(null);
+  const [loadingAccom, setLoadingAccom] = useState(false);
+  const [selectedAccom, setSelectedAccom] = useState<'budget' | 'midrange' | 'premium'>('budget');
 
   useEffect(() => {
     // Find destination in results or trending
     const found = [...results, ...TRENDING_DESTINATIONS].find(d => d.id === id);
     if (found) {
       setDestination(found);
+      // Load real accommodations from Booking.com
+      loadAccommodations(found);
     }
   }, [id]);
+
+  const loadAccommodations = async (dest: Destination) => {
+    setLoadingAccom(true);
+    try {
+      const result = await searchAccommodations(
+        dest.city,
+        dest.departureDate,
+        dest.returnDate,
+        2,
+        'EUR'
+      );
+      if (result?.accommodations) {
+        setAccommodations(result.accommodations);
+      }
+    } catch (error) {
+      console.warn('Error loading accommodations:', error);
+    } finally {
+      setLoadingAccom(false);
+    }
+  };
 
   if (!destination) {
     return (
@@ -196,6 +224,109 @@ export default function DetailScreen() {
             <Text style={styles.summaryTotalLabel}>Total estimado</Text>
             <Text style={styles.summaryTotalValue}>{destination.totalPrice}€</Text>
           </View>
+        </Card>
+
+        {/* Accommodations from Booking.com */}
+        <Card style={styles.accomCard}>
+          <View style={styles.accomHeader}>
+            <Text style={styles.cardTitle}>Alojamiento</Text>
+            <Text style={styles.accomPowered}>via Booking.com</Text>
+          </View>
+
+          {loadingAccom ? (
+            <View style={styles.accomLoading}>
+              <ActivityIndicator size="small" color={Colors.coral} />
+              <Text style={styles.accomLoadingText}>Buscando alojamientos...</Text>
+            </View>
+          ) : accommodations ? (
+            <>
+              {/* Category Tabs */}
+              <View style={styles.accomTabs}>
+                {([
+                  { key: 'budget', label: 'Economico', icon: 'wallet-outline' },
+                  { key: 'midrange', label: 'Confort', icon: 'star-half-outline' },
+                  { key: 'premium', label: 'Premium', icon: 'diamond-outline' },
+                ] as const).map(tab => (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[styles.accomTab, selectedAccom === tab.key && styles.accomTabActive]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedAccom(tab.key);
+                    }}
+                  >
+                    <Ionicons
+                      name={tab.icon as any}
+                      size={16}
+                      color={selectedAccom === tab.key ? '#fff' : Colors.onSurfaceDim}
+                    />
+                    <Text style={[styles.accomTabText, selectedAccom === tab.key && styles.accomTabTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Selected Accommodation Card */}
+              {accommodations[selectedAccom] ? (
+                <TouchableOpacity
+                  style={styles.accomDetail}
+                  onPress={() => {
+                    const url = accommodations[selectedAccom]?.booking_url;
+                    if (url) Linking.openURL(url);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {accommodations[selectedAccom]!.photo_url ? (
+                    <Image
+                      source={{ uri: accommodations[selectedAccom]!.photo_url }}
+                      style={styles.accomImage}
+                    />
+                  ) : null}
+                  <View style={styles.accomInfo}>
+                    <Text style={styles.accomName} numberOfLines={2}>
+                      {accommodations[selectedAccom]!.name}
+                    </Text>
+                    <View style={styles.accomMeta}>
+                      {accommodations[selectedAccom]!.stars > 0 && (
+                        <View style={styles.accomStars}>
+                          <Ionicons name="star" size={12} color="#FFD700" />
+                          <Text style={styles.accomStarsText}>
+                            {accommodations[selectedAccom]!.stars}
+                          </Text>
+                        </View>
+                      )}
+                      {accommodations[selectedAccom]!.review_score > 0 && (
+                        <View style={styles.accomReview}>
+                          <Text style={styles.accomReviewScore}>
+                            {accommodations[selectedAccom]!.review_score}
+                          </Text>
+                          <Text style={styles.accomReviewWord}>
+                            {accommodations[selectedAccom]!.review_word}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.accomPriceRow}>
+                      <Text style={styles.accomPrice}>
+                        {Math.round(accommodations[selectedAccom]!.total_price)}€
+                      </Text>
+                      <Text style={styles.accomPerNight}>
+                        ({Math.round(accommodations[selectedAccom]!.price_per_night)}€/noche)
+                      </Text>
+                    </View>
+                    <Text style={styles.accomType}>
+                      {accommodations[selectedAccom]!.accommodation_type}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.accomEmpty}>No disponible para esta categoria</Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.accomEmpty}>No se encontraron alojamientos</Text>
+          )}
         </Card>
 
         {/* Add-ons */}
@@ -469,5 +600,141 @@ const styles = StyleSheet.create({
     ...Typography.h2,
     color: Colors.onSurfaceDim,
     marginBottom: Spacing.xl,
+  },
+  // Accommodation styles
+  accomCard: {
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+  },
+  accomHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  accomPowered: {
+    fontSize: 11,
+    color: Colors.onSurfaceDim,
+    opacity: 0.6,
+  },
+  accomLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  accomLoadingText: {
+    ...Typography.body,
+    color: Colors.onSurfaceDim,
+    fontSize: 13,
+  },
+  accomTabs: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  accomTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceMid,
+    gap: 4,
+  },
+  accomTabActive: {
+    backgroundColor: Colors.coral,
+  },
+  accomTabText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.onSurfaceDim,
+  },
+  accomTabTextActive: {
+    color: '#fff',
+  },
+  accomDetail: {
+    flexDirection: 'row',
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceMid,
+    overflow: 'hidden',
+  },
+  accomImage: {
+    width: 100,
+    height: 120,
+  },
+  accomInfo: {
+    flex: 1,
+    padding: Spacing.sm,
+    justifyContent: 'space-between',
+  },
+  accomName: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 14,
+  },
+  accomMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  accomStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  accomStarsText: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+  },
+  accomReview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  accomReviewScore: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.coral,
+    backgroundColor: Colors.coral + '15',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  accomReviewWord: {
+    fontSize: 11,
+    color: Colors.onSurfaceDim,
+  },
+  accomPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginTop: 4,
+  },
+  accomPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.coral,
+  },
+  accomPerNight: {
+    fontSize: 11,
+    color: Colors.onSurfaceDim,
+  },
+  accomType: {
+    fontSize: 10,
+    color: Colors.onSurfaceDim,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  accomEmpty: {
+    ...Typography.body,
+    color: Colors.onSurfaceDim,
+    textAlign: 'center',
+    paddingVertical: Spacing.lg,
+    fontSize: 13,
   },
 });

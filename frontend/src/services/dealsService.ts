@@ -115,7 +115,94 @@ export const markAllNotificationsRead = async (userId: string): Promise<number> 
   }
 };
 
-// ==================== ALERT PREFERENCES ====================
+// ==================== ACCOMMODATIONS ====================
+
+export interface Accommodation {
+  category: 'budget' | 'midrange' | 'premium';
+  name: string;
+  stars: number;
+  review_score: number;
+  review_word: string;
+  total_price: number;
+  price_per_night: number;
+  currency: string;
+  photo_url: string;
+  address: string;
+  distance_to_center: string;
+  booking_url: string;
+  accommodation_type: string;
+}
+
+export interface AccommodationResult {
+  city: string;
+  checkin: string;
+  checkout: string;
+  nights: number;
+  total_results: number;
+  accommodations: {
+    budget: Accommodation | null;
+    midrange: Accommodation | null;
+    premium: Accommodation | null;
+  };
+}
+
+export const searchAccommodations = async (
+  city: string,
+  checkin: string,
+  checkout: string,
+  adults: number = 2,
+  currency: string = 'EUR'
+): Promise<AccommodationResult | null> => {
+  try {
+    const response = await apiClient.get('/api/accommodations/search', {
+      params: { city, checkin, checkout, adults, currency },
+      timeout: 30000,
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('[Accommodations] Error searching:', error);
+    return null;
+  }
+};
+
+// ==================== CURRENCY ====================
+
+export interface ExchangeRates {
+  base: string;
+  rates: Record<string, number>;
+  timestamp: number;
+}
+
+export const getExchangeRates = async (
+  base: string = 'EUR',
+  targets: string = 'USD,GBP,MXN,BRL,COP'
+): Promise<ExchangeRates | null> => {
+  try {
+    const response = await apiClient.get('/api/currency/rates', {
+      params: { base, targets },
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('[Currency] Error getting rates:', error);
+    return null;
+  }
+};
+
+export const convertCurrency = async (
+  amount: number,
+  from: string = 'EUR',
+  to: string = 'USD'
+): Promise<{ result: number; rate: number } | null> => {
+  try {
+    const response = await apiClient.get('/api/currency/convert', {
+      params: { amount, from_currency: from, to_currency: to },
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('[Currency] Error converting:', error);
+    return null;
+  }
+};
 
 export interface AlertPreference {
   user_id: string;
