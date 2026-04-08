@@ -7,6 +7,7 @@ import { Destination } from '../types';
 import { GLOBAL_DESTINATIONS, GlobalDestination, MoodTag, Season } from '../data/globalDestinations';
 import { getVisaStatus, VisaStatus } from '../data/visaData';
 import { searchMultipleDestinations } from './flightService';
+import { searchAccommodations } from './dealsService';
 
 interface SearchParams {
   originIata: string;
@@ -430,7 +431,92 @@ export const smartSearch = async (params: SearchParams): Promise<Destination[]> 
 
   // Step 3: Score & rank
   const ranked = scoreResults(results, candidates, params);
-  console.log(`[Algorithm] Final top ${ranked.length}: ${ranked.map(r => `${r.city}(${r.totalPrice}€)`).join(', ')}`);
+  console.log(`[Algorithm] Final top ${ranked.length}: ${ranked.map(r => `${r.city}(${r.flightPrice}€ flight)`).join(', ')}`);
+
+  // Step 4: Load REAL hotel prices from Booking.com for the top 3
+  console.log('[Algorithm] Loading real Booking.com prices for top results...');
+  const accomPromises = ranked.map(async (dest) => {
+    try {
+      const accomResult = await searchAccommodations(
+        dest.city,
+        params.departureDate,
+        params.returnDate,
+        2,
+        'EUR'
+      );
+      if (accomResult?.accommodations) {
+        // Use budget hotel price as default, or midrange if budget unavailable
+        const budgetAccom = accomResult.accommodations.budget;
+        const midrangeAccom = accomResult.accommodations.midrange;
+        const defaultAccom = budgetAccom || midrangeAccom;
+
+        if (defaultAccom) {
+          dest.hotelPrice = Math.round(defaultAccom.total_price);
+          dest.totalPrice = dest.flightPrice + dest.hotelPrice;
+        }
+
+        // Store all 3 accommodation options
+        dest.accommodations = {
+          budget: budgetAccom ? {
+            name: budgetAccom.name,
+            category: 'budget',
+            stars: budgetAccom.stars,
+            reviewScore: budgetAccom.review_score,
+            reviewWord: budgetAccom.review_word,
+            totalPrice: budgetAccom.total_price,
+            pricePerNight: budgetAccom.price_per_night,
+            currency: budgetAccom.currency,
+            photoUrl: budgetAccom.photo_url,
+            address: budgetAccom.address,
+            bookingUrl: budgetAccom.booking_url,
+            type: budgetAccom.accommodation_type,
+          } : undefined,
+          midrange: midrangeAccom ? {
+            name: midrangeAccom.name,
+            category: 'midrange',
+            stars: midrangeAccom.stars,
+            reviewScore: midrangeAccom.review_score,
+            reviewWord: midrangeAccom.review_word,
+            totalPrice: midrangeAccom.total_price,
+            pricePerNight: midrangeAccom.price_per_night,
+            currency: midrangeAccom.currency,
+            photoUrl: midrangeAccom.photo_url,
+            address: midrangeAccom.address,
+            bookingUrl: midrangeAccom.booking_url,
+            type: midrangeAccom.accommodation_type,
+          } : undefined,
+          premium: accomResult.accommodations.premium ? {
+            name: accomResult.accommodations.premium.name,
+            category: 'premium',
+            stars: accomResult.accommodations.premium.stars,
+            reviewScore: accomResult.accommodations.premium.review_score,
+            reviewWord: accomResult.accommodations.premium.review_word,
+            totalPrice: accomResult.accommodations.premium.total_price,
+            pricePerNight: accomResult.accommodations.premium.price_per_night,
+            currency: accomResult.accommodations.premium.currency,
+            photoUrl: accomResult.accommodations.premium.photo_url,
+            address: accomResult.accommodations.premium.address,
+            bookingUrl: accomResult.accommodations.premium.booking_url,
+            type: accomResult.accommodations.premium.accommodation_type,
+          } : undefined,
+        };
+
+        console.log(`[Algorithm] ${dest.city}: hotel ${dest.hotelPrice}€ → total ${dest.totalPrice}€`);
+      }
+    } catch (error) {
+      console.warn(`[Algorithm] Failed to load Booking.com for ${dest.city}:`, error);
+    }
+  });
+
+  await Promise.allSettled(accomPromises);
+
+  // Re-sort by total real price and re-assign badges
+  ranked.sort((a, b) => a.totalPrice - b.totalPrice);
+  if (ranked.length > 0) ranked[0].badge = 'cheapest';
+  if (ranked.length > 1) ranked[1].badge = 'best-value';
+  if (ranked.length > 2) ranked[2].badge = 'hidden-gem';
+
+  console.log(`[Algorithm] Final with REAL prices: ${ranked.map(r => `${r.city}(${r.totalPrice}€ = ${r.flightPrice}€ flight + ${r.hotelPrice}€ hotel)`).join(', ')}`);
 
   return ranked;
 };

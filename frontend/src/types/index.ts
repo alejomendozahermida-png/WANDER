@@ -13,6 +13,56 @@ export interface User {
   onboardingComplete: boolean;
 }
 
+export interface FlightSegment {
+  airline: string;
+  airlineLogo?: string;
+  flightNumber: string;
+  departureAirport: string;
+  departureName: string;
+  departureTime: string;
+  arrivalAirport: string;
+  arrivalName: string;
+  arrivalTime: string;
+  duration: string;
+  aircraft?: string;
+}
+
+export interface FlightDetail {
+  offerId: string;
+  airline: string;
+  totalPrice: number;
+  currency: string;
+  outbound: {
+    departure: string;
+    arrival: string;
+    duration: string;
+    stops: number;
+    segments: FlightSegment[];
+  };
+  inbound: {
+    departure: string;
+    arrival: string;
+    duration: string;
+    stops: number;
+    segments: FlightSegment[];
+  };
+}
+
+export interface AccommodationInfo {
+  name: string;
+  category: 'budget' | 'midrange' | 'premium';
+  stars: number;
+  reviewScore: number;
+  reviewWord: string;
+  totalPrice: number;
+  pricePerNight: number;
+  currency: string;
+  photoUrl: string;
+  address: string;
+  bookingUrl: string;
+  type: string;
+}
+
 export interface Destination {
   id: string;
   city: string;
@@ -29,6 +79,20 @@ export interface Destination {
   flightDuration?: string;
   costOfLiving?: string;
   visaFree: boolean;
+  // NEW: Rich flight details
+  flightDetails?: FlightDetail;
+  // NEW: Real accommodations from Booking.com
+  accommodations?: {
+    budget?: AccommodationInfo;
+    midrange?: AccommodationInfo;
+    premium?: AccommodationInfo;
+  };
+  // NEW: Weather data
+  weather?: {
+    temp: number;
+    description: string;
+    icon: string;
+  };
 }
 
 export interface SavedTrip {

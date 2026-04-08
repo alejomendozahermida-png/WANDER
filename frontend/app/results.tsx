@@ -75,9 +75,10 @@ export default function ResultsScreen() {
     const messages = [
       'Conectando con aerolíneas...',
       'Buscando vuelos baratos...',
-      'Comparando precios...',
-      'Filtrando por tu presupuesto...',
-      'Casi listo, encontrando las mejores opciones...',
+      'Comparando precios de vuelos...',
+      'Buscando hoteles en Booking.com...',
+      'Calculando precio total real...',
+      'Casi listo, seleccionando las mejores opciones...',
     ];
     let msgIdx = 0;
     const msgInterval = setInterval(() => {

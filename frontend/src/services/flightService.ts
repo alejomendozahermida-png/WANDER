@@ -164,8 +164,6 @@ export const searchMultipleDestinations = async (
           );
 
           const flightPrice = parseFloat(cheapestOffer.total_amount);
-          const hotelPrice = Math.round(50 + Math.random() * 100); // Mock hotel price (50-150€)
-          const totalPrice = flightPrice + hotelPrice;
 
           // Get city/country from Duffel response
           const destData = cheapestOffer.slices[0]?.destination;
@@ -183,25 +181,67 @@ export const searchMultipleDestinations = async (
             } catch { visaFree = true; }
           }
 
-          if (totalPrice <= budgetMax || results.length < 3) {
-            const destination: Destination = {
-              id: destIata,
-              city: cityName,
-              country: countryName,
-              iata: destIata,
-              flightPrice: Math.round(flightPrice),
-              hotelPrice: hotelPrice,
-              totalPrice: Math.round(totalPrice),
-              departureDate,
-              returnDate,
-              imageUrl: CITY_IMAGES[destIata] || `https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80`,
-              temperature: AVG_TEMPS[destIata] || 25,
-              flightDuration: formatDuration(cheapestOffer.slices[0]?.duration),
-              costOfLiving: COST_OF_LIVING[destIata] || 'Medio',
-              visaFree,
-            };
+          // Extract rich flight details from Duffel offer
+          const extractSegments = (slice: any) => {
+            return (slice.segments || []).map((seg: any) => ({
+              airline: seg.marketing_carrier?.name || seg.operating_carrier?.name || cheapestOffer.owner?.name || 'Unknown',
+              airlineLogo: seg.marketing_carrier?.logo_symbol_url || seg.operating_carrier?.logo_symbol_url || '',
+              flightNumber: `${seg.marketing_carrier?.iata_code || ''}${seg.marketing_carrier_flight_number || ''}`,
+              departureAirport: seg.origin?.iata_code || '',
+              departureName: seg.origin?.city_name || seg.origin?.name || '',
+              departureTime: seg.departing_at || '',
+              arrivalAirport: seg.destination?.iata_code || '',
+              arrivalName: seg.destination?.city_name || seg.destination?.name || '',
+              arrivalTime: seg.arriving_at || '',
+              duration: formatDuration(seg.duration),
+              aircraft: seg.aircraft?.name || '',
+            }));
+          };
 
-            results.push(destination);
+          const outboundSlice = cheapestOffer.slices[0];
+          const inboundSlice = cheapestOffer.slices[1];
+
+          const flightDetails = {
+            offerId: cheapestOffer.id,
+            airline: cheapestOffer.owner?.name || 'Unknown',
+            totalPrice: Math.round(flightPrice),
+            currency: cheapestOffer.total_currency || 'EUR',
+            outbound: {
+              departure: outboundSlice?.segments?.[0]?.departing_at || '',
+              arrival: outboundSlice?.segments?.slice(-1)[0]?.arriving_at || '',
+              duration: formatDuration(outboundSlice?.duration),
+              stops: Math.max(0, (outboundSlice?.segments?.length || 1) - 1),
+              segments: extractSegments(outboundSlice),
+            },
+            inbound: inboundSlice ? {
+              departure: inboundSlice?.segments?.[0]?.departing_at || '',
+              arrival: inboundSlice?.segments?.slice(-1)[0]?.arriving_at || '',
+              duration: formatDuration(inboundSlice?.duration),
+              stops: Math.max(0, (inboundSlice?.segments?.length || 1) - 1),
+              segments: extractSegments(inboundSlice),
+            } : { departure: '', arrival: '', duration: 'N/A', stops: 0, segments: [] },
+          };
+
+          // Hotel price will be set to 0 — real price loaded from Booking.com later
+          const destination: Destination = {
+            id: destIata,
+            city: cityName,
+            country: countryName,
+            iata: destIata,
+            flightPrice: Math.round(flightPrice),
+            hotelPrice: 0, // Will be replaced with real Booking.com price
+            totalPrice: Math.round(flightPrice), // Temporary — updated after Booking.com
+            departureDate,
+            returnDate,
+            imageUrl: CITY_IMAGES[destIata] || `https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80`,
+            temperature: AVG_TEMPS[destIata] || 25,
+            flightDuration: formatDuration(outboundSlice?.duration),
+            costOfLiving: COST_OF_LIVING[destIata] || 'Medio',
+            visaFree,
+            flightDetails,
+          };
+
+          results.push(destination);
           }
         }
       } catch (error: any) {
