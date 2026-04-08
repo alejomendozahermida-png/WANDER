@@ -414,6 +414,243 @@ async def get_alert_preference(user_id: str):
         return pref
     return {"user_id": user_id, "active": False}
 
+
+# ==================== ACCOMMODATION SEARCH (Booking.com) ====================
+
+RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '')
+
+RAPIDAPI_HEADERS = {
+    'X-RapidAPI-Key': RAPIDAPI_KEY,
+    'Content-Type': 'application/json',
+}
+
+
+async def booking_search_dest_id(city: str) -> Optional[str]:
+    """Get Booking.com dest_id for a city"""
+    cache = await db.booking_dest_cache.find_one({"city": city.lower()})
+    if cache:
+        return cache["dest_id"]
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_http:
+            r = await client_http.get(
+                'https://booking-com.p.rapidapi.com/v1/hotels/locations',
+                params={'name': city, 'locale': 'en-gb'},
+                headers={**RAPIDAPI_HEADERS, 'X-RapidAPI-Host': 'booking-com.p.rapidapi.com'},
+            )
+            data = r.json()
+            if isinstance(data, list) and data:
+                dest_id = data[0].get('dest_id')
+                # Cache it
+                await db.booking_dest_cache.update_one(
+                    {"city": city.lower()},
+                    {"$set": {"city": city.lower(), "dest_id": dest_id, "data": data[0]}},
+                    upsert=True
+                )
+                return dest_id
+    except Exception as e:
+        logger.error(f"Booking dest search error for {city}: {e}")
+    return None
+
+
+async def booking_search_hotels(
+    dest_id: str,
+    checkin: str,
+    checkout: str,
+    adults: int = 2,
+    currency: str = "EUR"
+) -> list:
+    """Search hotels on Booking.com and return categorized results"""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client_http:
+            r = await client_http.get(
+                'https://booking-com.p.rapidapi.com/v1/hotels/search',
+                params={
+                    'dest_id': dest_id,
+                    'dest_type': 'city',
+                    'checkin_date': checkin,
+                    'checkout_date': checkout,
+                    'adults_number': str(adults),
+                    'room_number': '1',
+                    'order_by': 'price',
+                    'locale': 'en-gb',
+                    'currency': currency,
+                    'units': 'metric',
+                    'filter_by_currency': currency,
+                    'page_number': '0',
+                    'include_adjacency': 'true',
+                },
+                headers={**RAPIDAPI_HEADERS, 'X-RapidAPI-Host': 'booking-com.p.rapidapi.com'},
+            )
+            data = r.json()
+            return data.get('result', [])
+    except Exception as e:
+        logger.error(f"Booking hotel search error: {e}")
+        return []
+
+
+def categorize_accommodations(hotels: list, nights: int) -> dict:
+    """Pick 3 accommodation types: budget, mid-range, premium"""
+    if not hotels:
+        return {"budget": None, "midrange": None, "premium": None}
+
+    def format_hotel(h, category):
+        total = h.get('min_total_price') or h.get('composite_price_breakdown', {}).get('gross_amount', {}).get('value', 0)
+        per_night = round(float(total) / max(nights, 1), 2) if total else 0
+        photo = h.get('max_photo_url', h.get('main_photo_url', ''))
+        return {
+            "category": category,
+            "name": h.get('hotel_name', 'Unknown'),
+            "stars": h.get('class', 0),
+            "review_score": h.get('review_score', 0),
+            "review_word": h.get('review_score_word', ''),
+            "total_price": round(float(total), 2) if total else 0,
+            "price_per_night": per_night,
+            "currency": h.get('currency_code', 'EUR'),
+            "photo_url": photo,
+            "address": h.get('address', ''),
+            "distance_to_center": h.get('distance_to_cc', ''),
+            "booking_url": h.get('url', ''),
+            "accommodation_type": h.get('accommodation_type_name', 'Hotel'),
+        }
+
+    sorted_hotels = sorted(hotels, key=lambda x: float(x.get('min_total_price', 9999) or 9999))
+
+    budget = None
+    midrange = None
+    premium = None
+
+    for h in sorted_hotels:
+        stars = float(h.get('class', 0) or 0)
+        price = float(h.get('min_total_price', 0) or 0)
+        review = float(h.get('review_score', 0) or 0)
+
+        if not budget and price > 0:
+            budget = format_hotel(h, 'budget')
+        elif not midrange and (stars >= 3 or review >= 7.5) and price > 0:
+            midrange = format_hotel(h, 'midrange')
+        elif not premium and (stars >= 4 or review >= 8.5) and price > 0:
+            premium = format_hotel(h, 'premium')
+
+        if budget and midrange and premium:
+            break
+
+    # Fallbacks
+    if not midrange and len(sorted_hotels) > 1:
+        midrange = format_hotel(sorted_hotels[len(sorted_hotels) // 3], 'midrange')
+    if not premium and len(sorted_hotels) > 2:
+        premium = format_hotel(sorted_hotels[-1], 'premium')
+
+    return {"budget": budget, "midrange": midrange, "premium": premium}
+
+
+@api_router.get("/accommodations/search")
+async def search_accommodations(
+    city: str,
+    checkin: str,
+    checkout: str,
+    adults: int = 2,
+    currency: str = "EUR"
+):
+    """Search 3 accommodation options for a city (budget, mid-range, premium)"""
+    # Calculate nights
+    from datetime import date
+    try:
+        d1 = date.fromisoformat(checkin)
+        d2 = date.fromisoformat(checkout)
+        nights = (d2 - d1).days
+    except Exception:
+        nights = 7
+
+    # Get destination ID
+    dest_id = await booking_search_dest_id(city)
+    if not dest_id:
+        return {"city": city, "accommodations": None, "error": "City not found on Booking.com"}
+
+    # Search hotels
+    hotels = await booking_search_hotels(dest_id, checkin, checkout, adults, currency)
+    if not hotels:
+        return {"city": city, "accommodations": None, "error": "No hotels found"}
+
+    # Categorize into 3 types
+    accommodations = categorize_accommodations(hotels, nights)
+
+    return {
+        "city": city,
+        "checkin": checkin,
+        "checkout": checkout,
+        "nights": nights,
+        "total_results": len(hotels),
+        "accommodations": accommodations,
+    }
+
+
+# ==================== CURRENCY CONVERSION ====================
+
+@api_router.get("/currency/rates")
+async def get_exchange_rates(base: str = "EUR", targets: str = "USD,GBP,MXN,BRL,COP,ARS,CLP,PEN"):
+    """Get exchange rates from a base currency to targets"""
+    # Check cache (refresh every hour)
+    cache_key = f"rates_{base}_{targets}"
+    cached = await db.currency_cache.find_one({"key": cache_key})
+    if cached:
+        cache_age = (datetime.utcnow() - cached["updated_at"]).total_seconds()
+        if cache_age < 3600:  # 1 hour cache
+            cached.pop("_id", None)
+            return cached["data"]
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_http:
+            r = await client_http.get(
+                'https://currency-conversion-and-exchange-rates.p.rapidapi.com/latest',
+                params={'from': base, 'to': targets},
+                headers={**RAPIDAPI_HEADERS, 'X-RapidAPI-Host': 'currency-conversion-and-exchange-rates.p.rapidapi.com'},
+            )
+            data = r.json()
+
+            if data.get('success'):
+                result = {
+                    "base": base,
+                    "rates": data.get("rates", {}),
+                    "timestamp": data.get("timestamp"),
+                }
+                # Cache
+                await db.currency_cache.update_one(
+                    {"key": cache_key},
+                    {"$set": {"key": cache_key, "data": result, "updated_at": datetime.utcnow()}},
+                    upsert=True
+                )
+                return result
+            return {"error": "Failed to fetch rates", "raw": data}
+    except Exception as e:
+        logger.error(f"Currency API error: {e}")
+        return {"error": str(e)}
+
+
+@api_router.get("/currency/convert")
+async def convert_currency(amount: float, from_currency: str = "EUR", to_currency: str = "USD"):
+    """Convert a specific amount between currencies"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_http:
+            r = await client_http.get(
+                'https://currency-conversion-and-exchange-rates.p.rapidapi.com/convert',
+                params={'from': from_currency, 'to': to_currency, 'amount': str(amount)},
+                headers={**RAPIDAPI_HEADERS, 'X-RapidAPI-Host': 'currency-conversion-and-exchange-rates.p.rapidapi.com'},
+            )
+            data = r.json()
+            if data.get('success'):
+                return {
+                    "from": from_currency,
+                    "to": to_currency,
+                    "amount": amount,
+                    "result": data.get("result"),
+                    "rate": data.get("info", {}).get("rate"),
+                }
+            return {"error": "Conversion failed", "raw": data}
+    except Exception as e:
+        logger.error(f"Currency convert error: {e}")
+        return {"error": str(e)}
+
 # Include the router in the main app
 app.include_router(api_router)
 

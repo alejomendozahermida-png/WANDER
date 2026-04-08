@@ -150,6 +150,30 @@ backend:
           agent: "testing"
           comment: "✅ Alert Preferences API working perfectly. Tested: POST /api/alerts/preferences successfully saves user preferences with all fields (user_id, max_price, preferred_destinations, origin_iata, active). GET /api/alerts/preferences/{user_id} correctly retrieves saved preferences. Data persistence confirmed in MongoDB. All required fields present in responses."
 
+  - task: "Accommodation Search API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ NEW Accommodation Search API working perfectly. Tested: GET /api/accommodations/search for Lisbon and Bangkok with real Booking.com API integration via RapidAPI. Returns 3 accommodation categories (budget, midrange, premium) with all required fields: name, stars, review_score, total_price, price_per_night, photo_url. Response times: 1.79s (Lisbon), 2.13s (Bangkok). All response structures correct."
+
+  - task: "Currency Exchange API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ NEW Currency Exchange API working perfectly. Tested: GET /api/currency/rates returns exchange rates for EUR to USD,GBP,MXN,BRL (1.42s response). GET /api/currency/convert properly converts EUR to USD with correct rate and result (0.32s response). All required fields present in responses."
+
 frontend:
   - task: "Duffel API Flight Search Integration"
     implemented: true
@@ -235,6 +259,8 @@ agent_communication:
       message: "I've completed the Duffel API integration rewrite. Key changes: (1) flightService.ts now correctly maps Duffel response fields (city_name, iata_country_code→country name), (2) formatDuration handles all ISO 8601 variants (PT8H, PT2H30M, PT45M), (3) dates auto-adjust for Duffel test API key (needs dates 340+ days in future), (4) results.tsx passes user's homeAirportIata and passportCountry, (5) loading messages rotate during search. Verified via Node.js integration test that Duffel API returns real flight data. The Ngrok tunnel has persistent infrastructure issues (502/503). Please test the search flow by navigating to the home screen, selecting dates and mood, and verifying results display correctly with real Duffel flight prices. Test credentials: Register a new account through the app."
     - agent: "testing"
       message: "✅ BACKEND TESTING COMPLETE - All 3 backend tasks are working correctly! Comprehensive testing performed on all RSS Deal Aggregator, Notifications, and Alert Preferences APIs. All endpoints return proper JSON responses with correct status codes. RSS feeds: 3/4 working (Secret Flying returns HTML instead of RSS, causing expected parsing errors), but API handles failures gracefully. Created backend_test.py with full test suite. Database persistence confirmed. No critical issues found. All backend functionality is production-ready."
+    - agent: "testing"
+      message: "✅ NEW ENDPOINTS TESTING COMPLETE - All 5 NEW endpoints working perfectly! Tested: (1) GET /api/ health check returns 'Wander API v2.0', (2) GET /api/accommodations/search for Lisbon & Bangkok - both return 3 categories (budget/midrange/premium) with all required fields via real Booking.com API (1.79s & 2.13s response times), (3) GET /api/currency/rates returns EUR to USD,GBP,MXN,BRL rates (1.42s), (4) GET /api/currency/convert EUR→USD works correctly (0.32s). All response structures match requirements. RapidAPI integration working. Created new_endpoints_test.py with comprehensive test suite."
 
 test_credentials:
   note: "No fixed test credentials - users register through the app's Register screen with email/password via Supabase Auth"
