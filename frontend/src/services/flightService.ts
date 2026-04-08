@@ -119,8 +119,8 @@ export const searchMultipleDestinations = async (
   const adjusted = adjustDatesForTestApi(departureDate, returnDate);
   console.log(`[Duffel] Searching from ${origin}, dates: ${adjusted.departure} → ${adjusted.return} (original: ${departureDate} → ${returnDate})`);
 
-  // Batch destinations in groups of 4 to avoid rate limits
-  const batchSize = 4;
+  // Batch destinations in groups of 5 for faster results
+  const batchSize = 5;
   for (let i = 0; i < destinations.length; i += batchSize) {
     const batch = destinations.slice(i, i + batchSize);
 

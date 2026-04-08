@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Switch,
   ActivityIndicator,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Destination, FlightSegment } from '../../src/types';
 import { searchAccommodations, Accommodation } from '../../src/services/dealsService';
 import { useUserStore } from '../../src/store/userStore';
+import { GLOBAL_DESTINATIONS } from '../../src/data/globalDestinations';
 
 const { height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.4;
@@ -70,6 +72,34 @@ export default function DetailScreen() {
   const [loadingAccom, setLoadingAccom] = useState(false);
   const [selectedAccom, setSelectedAccom] = useState<'budget' | 'midrange' | 'premium'>('budget');
   const [expandedFlight, setExpandedFlight] = useState<'outbound' | 'inbound' | null>(null);
+  const [showAccomModal, setShowAccomModal] = useState(false);
+  const [modalAccom, setModalAccom] = useState<Accommodation | null>(null);
+
+  // Look up cost of living index from global destinations
+  const globalDest = useMemo(() => {
+    if (!destination) return null;
+    return GLOBAL_DESTINATIONS.find(gd => gd.iata === destination.iata) || null;
+  }, [destination?.iata]);
+
+  const nights = useMemo(() => {
+    if (!destination) return 7;
+    return calcNights(destination.departureDate, destination.returnDate);
+  }, [destination?.departureDate, destination?.returnDate]);
+
+  // Cost of living estimates (per day * nights)
+  const costOfLivingIndex = globalDest?.costOfLivingIndex || 5;
+  const dailyMealsCost = Math.round(costOfLivingIndex * 6.5);  // 6.5€-65€/day
+  const dailyTransportCost = Math.round(costOfLivingIndex * 2.5); // 2.5€-25€/day
+  const totalMealsCost = dailyMealsCost * nights;
+  const totalTransportCost = dailyTransportCost * nights;
+
+  // Dynamic accommodation price based on selected tab
+  const currentAccomPrice = useMemo(() => {
+    if (!accommodations || !accommodations[selectedAccom]) {
+      return destination?.hotelPrice || 0;
+    }
+    return Math.round(accommodations[selectedAccom]!.total_price);
+  }, [accommodations, selectedAccom, destination?.hotelPrice]);
 
   useEffect(() => {
     // Find destination in results or trending
@@ -139,10 +169,10 @@ export default function DetailScreen() {
   };
 
   const calculateTotal = () => {
-    let total = destination.totalPrice;
+    let total = (destination.flightPrice || 0) + currentAccomPrice + totalMealsCost + totalTransportCost;
     if (insuranceEnabled) total += 8;
     if (esimEnabled) total += 5;
-    return total;
+    return Math.round(total);
   };
 
   return (
@@ -377,31 +407,31 @@ export default function DetailScreen() {
             <View style={styles.summaryIcon}>
               <Ionicons name="bed" size={20} color={Colors.coral} />
             </View>
-            <Text style={styles.summaryLabel}>Alojamiento ({calcNights(destination.departureDate, destination.returnDate)} noches)</Text>
-            <Text style={styles.summaryValue}>{destination.hotelPrice}€</Text>
+            <Text style={styles.summaryLabel}>Alojamiento ({nights} noches)</Text>
+            <Text style={styles.summaryValue}>{currentAccomPrice}€</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryIcon}>
               <Ionicons name="restaurant" size={20} color={Colors.coral} />
             </View>
-            <Text style={styles.summaryLabel}>Comidas estimadas</Text>
-            <Text style={styles.summaryValue}>~150€</Text>
+            <Text style={styles.summaryLabel}>Comidas ({dailyMealsCost}€/dia x {nights})</Text>
+            <Text style={styles.summaryValue}>{totalMealsCost}€</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryIcon}>
               <Ionicons name="bus" size={20} color={Colors.coral} />
             </View>
-            <Text style={styles.summaryLabel}>Transporte local</Text>
-            <Text style={styles.summaryValue}>~30€</Text>
+            <Text style={styles.summaryLabel}>Transporte ({dailyTransportCost}€/dia x {nights})</Text>
+            <Text style={styles.summaryValue}>{totalTransportCost}€</Text>
           </View>
 
           <View style={styles.summaryDivider} />
 
           <View style={styles.summaryTotalRow}>
             <Text style={styles.summaryTotalLabel}>Total estimado</Text>
-            <Text style={styles.summaryTotalValue}>{destination.totalPrice}€</Text>
+            <Text style={styles.summaryTotalValue}>{calculateTotal()}€</Text>
           </View>
         </Card>
 
@@ -451,8 +481,9 @@ export default function DetailScreen() {
                 <TouchableOpacity
                   style={styles.accomDetail}
                   onPress={() => {
-                    const url = accommodations[selectedAccom]?.booking_url;
-                    if (url) Linking.openURL(url);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setModalAccom(accommodations[selectedAccom]!);
+                    setShowAccomModal(true);
                   }}
                   activeOpacity={0.7}
                 >
@@ -549,6 +580,108 @@ export default function DetailScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Accommodation Detail Modal */}
+      <Modal
+        visible={showAccomModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAccomModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalle del alojamiento</Text>
+              <TouchableOpacity
+                onPress={() => setShowAccomModal(false)}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={24} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            {modalAccom && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Hotel Photo */}
+                {modalAccom.photo_url ? (
+                  <Image
+                    source={{ uri: modalAccom.photo_url }}
+                    style={styles.modalImage}
+                  />
+                ) : (
+                  <View style={[styles.modalImage, { backgroundColor: Colors.surfaceMid, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="bed" size={48} color={Colors.onSurfaceDim} />
+                  </View>
+                )}
+
+                {/* Hotel Info */}
+                <View style={styles.modalBody}>
+                  <Text style={styles.modalAccomName}>{modalAccom.name}</Text>
+                  <Text style={styles.modalAccomType}>{modalAccom.accommodation_type}</Text>
+
+                  {/* Rating Row */}
+                  <View style={styles.modalRatingRow}>
+                    {modalAccom.stars > 0 && (
+                      <View style={styles.modalStars}>
+                        {Array.from({ length: modalAccom.stars }).map((_, i) => (
+                          <Ionicons key={i} name="star" size={16} color="#FFD700" />
+                        ))}
+                      </View>
+                    )}
+                    {modalAccom.review_score > 0 && (
+                      <View style={styles.modalReviewBadge}>
+                        <Text style={styles.modalReviewScore}>{modalAccom.review_score}</Text>
+                        <Text style={styles.modalReviewWord}>{modalAccom.review_word}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Address */}
+                  {modalAccom.address ? (
+                    <View style={styles.modalInfoRow}>
+                      <Ionicons name="location" size={18} color={Colors.coral} />
+                      <Text style={styles.modalInfoText}>{modalAccom.address}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Distance */}
+                  {modalAccom.distance_to_center ? (
+                    <View style={styles.modalInfoRow}>
+                      <Ionicons name="navigate" size={18} color={Colors.teal} />
+                      <Text style={styles.modalInfoText}>{modalAccom.distance_to_center} del centro</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Price Section */}
+                  <View style={styles.modalPriceSection}>
+                    <View style={styles.modalPriceMain}>
+                      <Text style={styles.modalPriceTotal}>{Math.round(modalAccom.total_price)}€</Text>
+                      <Text style={styles.modalPriceNights}>total ({nights} noches)</Text>
+                    </View>
+                    <View style={styles.modalPricePerNight}>
+                      <Text style={styles.modalPricePerNightValue}>{Math.round(modalAccom.price_per_night)}€</Text>
+                      <Text style={styles.modalPricePerNightLabel}>/noche</Text>
+                    </View>
+                  </View>
+
+                  {/* Book on Booking.com button */}
+                  <TouchableOpacity
+                    style={styles.modalBookingBtn}
+                    onPress={() => {
+                      if (modalAccom.booking_url) Linking.openURL(modalAccom.booking_url);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="open-outline" size={18} color="#fff" />
+                    <Text style={styles.modalBookingBtnText}>Ver en Booking.com</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Footer CTA */}
       <SafeAreaView edges={['bottom']} style={styles.footer}>
@@ -1058,5 +1191,147 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Spacing.lg,
     fontSize: 13,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceMid,
+  },
+  modalTitle: {
+    ...Typography.h3,
+    color: Colors.onSurface,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalImage: {
+    width: '100%',
+    height: 220,
+  },
+  modalBody: {
+    padding: Spacing.lg,
+  },
+  modalAccomName: {
+    ...Typography.h2,
+    color: Colors.onSurface,
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  modalAccomType: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
+    marginBottom: Spacing.md,
+  },
+  modalRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  modalStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  modalReviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalReviewScore: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+    backgroundColor: Colors.coral,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  modalReviewWord: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
+    fontWeight: '600',
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  modalInfoText: {
+    ...Typography.body,
+    color: Colors.onSurface,
+    flex: 1,
+    fontSize: 14,
+  },
+  modalPriceSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    marginVertical: Spacing.md,
+  },
+  modalPriceMain: {
+    alignItems: 'flex-start',
+  },
+  modalPriceTotal: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.coral,
+  },
+  modalPriceNights: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+    marginTop: 2,
+  },
+  modalPricePerNight: {
+    alignItems: 'flex-end',
+  },
+  modalPricePerNightValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  modalPricePerNightLabel: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+  },
+  modalBookingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#003580',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  modalBookingBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

@@ -217,6 +217,54 @@ frontend:
           agent: "main"
           comment: "Added expandable flight details section in detail screen. Shows outbound and inbound flights with airline, flight number, departure/arrival times/airports, duration, stops, aircraft. Fixed hardcoded '7 noches' to dynamic calc. Fixed hardcoded 'CDG' to use user homeAirportIata. TypeScript compiles clean."
 
+  - task: "Dynamic Accommodation Price Update"
+    implemented: true
+    working: true
+    file: "frontend/app/detail/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Total price now dynamically updates when user switches between Economico/Confort/Premium tabs. Uses currentAccomPrice state derived from accommodations[selectedAccom].total_price. Footer and trip summary both reflect the dynamic total."
+
+  - task: "In-App Accommodation Detail Modal"
+    implemented: true
+    working: true
+    file: "frontend/app/detail/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added bottom sheet modal when tapping accommodation card. Shows large photo, name, type, star rating, review score/word, address, distance to center, total price, price per night, and 'Ver en Booking.com' button. Modal slides up from bottom with dark overlay."
+
+  - task: "Real Cost of Living Estimates"
+    implemented: true
+    working: true
+    file: "frontend/app/detail/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Replaced hardcoded '~150€ meals' and '~30€ transport' with real estimates based on costOfLivingIndex from globalDestinations. Daily meals = index*6.5€, daily transport = index*2.5€, multiplied by trip nights. Summary shows per-day cost breakdown."
+
+  - task: "Skeleton Loader & Loading Optimization"
+    implemented: true
+    working: true
+    file: "frontend/app/results.tsx, frontend/src/services/searchAlgorithm.ts, frontend/src/services/flightService.ts"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Replaced simple ActivityIndicator with 3 animated skeleton cards with pulse animation in results screen. Reduced pre-filter from 15 to 10 candidates. Increased Duffel batch size from 4 to 5. ~33% faster search."
+
   - task: "Search Destination Logic with Mood Filter"
     implemented: true
     working: "NA"

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -105,13 +106,37 @@ export default function ResultsScreen() {
     }
   };
 
-  const renderLoadingSkeleton = () => (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color={Colors.coral} />
-      <Text style={styles.loadingText}>{loadingMessage}</Text>
-      <Text style={styles.loadingSubtext}>Esto puede tomar unos segundos</Text>
-    </View>
-  );
+  const renderLoadingSkeleton = () => {
+    const pulseAnim = useRef(new Animated.Value(0.4)).current;
+    useEffect(() => {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }, []);
+
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>{loadingMessage}</Text>
+        <Text style={styles.loadingSubtext}>Esto puede tomar unos segundos</Text>
+        {[0, 1, 2].map(i => (
+          <Animated.View key={i} style={[styles.skeletonCard, { opacity: pulseAnim }]}>
+            <View style={styles.skeletonImage} />
+            <View style={styles.skeletonBody}>
+              <View style={[styles.skeletonLine, { width: '60%', height: 20 }]} />
+              <View style={[styles.skeletonLine, { width: '40%', height: 14, marginTop: 8 }]} />
+              <View style={[styles.skeletonLine, { width: '80%', height: 14, marginTop: 12 }]} />
+              <View style={[styles.skeletonLine, { width: '50%', height: 28, marginTop: 16 }]} />
+            </View>
+          </Animated.View>
+        ))}
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -456,5 +481,25 @@ const styles = StyleSheet.create({
     color: Colors.coral,
     marginLeft: Spacing.sm,
     fontSize: 16,
+  },
+  // Skeleton loader styles
+  skeletonCard: {
+    width: '90%',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+  },
+  skeletonImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: Colors.surfaceMid,
+  },
+  skeletonBody: {
+    padding: Spacing.lg,
+  },
+  skeletonLine: {
+    backgroundColor: Colors.surfaceMid,
+    borderRadius: 6,
   },
 });

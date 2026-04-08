@@ -160,8 +160,8 @@ const preFilterDestinations = (params: SearchParams): ScoredCandidate[] => {
   // Sort by pre-score and take top candidates
   candidates.sort((a, b) => b.preScore - a.preScore);
   
-  // Take top 15 but ensure geographic diversity
-  return ensureDiversity(candidates, 15);
+  // Take top 10 but ensure geographic diversity
+  return ensureDiversity(candidates, 10);
 };
 
 /**
