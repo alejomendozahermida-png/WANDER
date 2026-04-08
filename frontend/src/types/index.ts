@@ -11,6 +11,13 @@ export interface User {
   travelStyle: string[];
   travelsAlone: boolean;
   onboardingComplete: boolean;
+  // NEW: Personalization fields
+  languages: string[];
+  travelExperience: 'beginner' | 'intermediate' | 'expert';
+  travelCompanion: 'solo' | 'couple' | 'friends' | 'family';
+  climatePref: 'hot' | 'warm' | 'mild' | 'cold' | 'any';
+  topPriority: 'price' | 'experience' | 'climate' | 'safety' | 'food';
+  accomPreference: 'hostel_dorm' | 'hostel_private' | 'budget_hotel' | 'boutique';
 }
 
 export interface FlightSegment {
@@ -75,6 +82,7 @@ export interface Destination {
   returnDate: string;
   imageUrl: string;
   badge?: 'cheapest' | 'best-value' | 'hidden-gem';
+  budgetTag?: 'within' | 'stretch' | 'worth-it';
   temperature?: number;
   flightDuration?: string;
   costOfLiving?: string;

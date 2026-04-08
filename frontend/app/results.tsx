@@ -210,6 +210,18 @@ export default function ResultsScreen() {
                   <Text style={styles.badgeText}>{badge.label}</Text>
                 </View>
 
+                {/* Budget Tag - Top Right */}
+                {destination.budgetTag === 'stretch' && (
+                  <View style={styles.budgetStretchBadge}>
+                    <Text style={styles.budgetStretchText}>Supera tu presupuesto</Text>
+                  </View>
+                )}
+                {destination.budgetTag === 'worth-it' && (
+                  <View style={styles.budgetWorthBadge}>
+                    <Text style={styles.budgetWorthText}>Vale la pena</Text>
+                  </View>
+                )}
+
                 {/* Content Container - Bottom */}
                 <View style={styles.cardContent}>
                   {/* Visa Status */}
@@ -394,6 +406,34 @@ const styles = StyleSheet.create({
     ...Typography.bodySemibold,
     color: Colors.background,
     fontSize: 12,
+  },
+  budgetStretchBadge: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    backgroundColor: '#FF9800',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  budgetStretchText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  budgetWorthBadge: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  budgetWorthText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '700',
   },
   visaContainer: {
     flexDirection: 'row',

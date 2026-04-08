@@ -67,6 +67,12 @@ export default function LoginScreen() {
             travelStyle: profile.travel_style || [],
             travelsAlone: profile.travels_alone || false,
             onboardingComplete: profile.onboarding_complete || false,
+            languages: profile.languages || [],
+            travelExperience: profile.travel_experience || 'beginner',
+            travelCompanion: profile.travel_companion || 'solo',
+            climatePref: profile.climate_pref || 'any',
+            topPriority: profile.top_priority || 'price',
+            accomPreference: profile.accom_preference || 'budget_hotel',
           };
 
           setUser(userData);

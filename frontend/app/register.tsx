@@ -72,6 +72,12 @@ export default function RegisterScreen() {
           travelStyle: [],
           travelsAlone: false,
           onboardingComplete: false,
+          languages: [] as string[],
+          travelExperience: 'beginner' as const,
+          travelCompanion: 'solo' as const,
+          climatePref: 'any' as const,
+          topPriority: 'price' as const,
+          accomPreference: 'budget_hotel' as const,
         };
 
         setUser(userData);

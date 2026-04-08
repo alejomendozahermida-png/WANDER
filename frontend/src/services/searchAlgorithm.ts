@@ -516,7 +516,20 @@ export const smartSearch = async (params: SearchParams): Promise<Destination[]> 
   if (ranked.length > 1) ranked[1].badge = 'best-value';
   if (ranked.length > 2) ranked[2].badge = 'hidden-gem';
 
-  console.log(`[Algorithm] Final with REAL prices: ${ranked.map(r => `${r.city}(${r.totalPrice}€ = ${r.flightPrice}€ flight + ${r.hotelPrice}€ hotel)`).join(', ')}`);
+  // Smart Budget: Tag destinations based on budget relationship
+  const budgetMax = params.budgetMax || 500;
+  const stretchLimit = budgetMax * 1.4; // 40% over
+  for (const dest of ranked) {
+    if (dest.totalPrice <= budgetMax) {
+      dest.budgetTag = 'within';
+    } else if (dest.totalPrice <= stretchLimit) {
+      dest.budgetTag = 'stretch';
+    } else {
+      dest.budgetTag = 'worth-it';
+    }
+  }
+
+  console.log(`[Algorithm] Final with REAL prices: ${ranked.map(r => `${r.city}(${r.totalPrice}€ = ${r.flightPrice}€ flight + ${r.hotelPrice}€ hotel) [${r.budgetTag}]`).join(', ')}`);
 
   return ranked;
 };

@@ -45,6 +45,13 @@ export const useUserStore = create<UserState>((set, get) => ({
       if (updates.travelStyle !== undefined) dbUpdates.travel_style = updates.travelStyle;
       if (updates.travelsAlone !== undefined) dbUpdates.travels_alone = updates.travelsAlone;
       if (updates.onboardingComplete !== undefined) dbUpdates.onboarding_complete = updates.onboardingComplete;
+      // New personalization fields
+      if (updates.languages !== undefined) dbUpdates.languages = updates.languages;
+      if (updates.travelExperience !== undefined) dbUpdates.travel_experience = updates.travelExperience;
+      if (updates.travelCompanion !== undefined) dbUpdates.travel_companion = updates.travelCompanion;
+      if (updates.climatePref !== undefined) dbUpdates.climate_pref = updates.climatePref;
+      if (updates.topPriority !== undefined) dbUpdates.top_priority = updates.topPriority;
+      if (updates.accomPreference !== undefined) dbUpdates.accom_preference = updates.accomPreference;
 
       const { error } = await supabase
         .from('profiles')
@@ -94,6 +101,12 @@ export const useUserStore = create<UserState>((set, get) => ({
             travelStyle: profile.travel_style || [],
             travelsAlone: profile.travels_alone || false,
             onboardingComplete: profile.onboarding_complete || false,
+            languages: profile.languages || [],
+            travelExperience: profile.travel_experience || 'beginner',
+            travelCompanion: profile.travel_companion || 'solo',
+            climatePref: profile.climate_pref || 'any',
+            topPriority: profile.top_priority || 'price',
+            accomPreference: profile.accom_preference || 'budget_hotel',
           };
           set({ user: userData, isAuthenticated: true, isLoading: false });
         } else {
