@@ -195,7 +195,7 @@ export default function HomeScreen() {
         <View style={styles.trendingSection}>
           <View style={styles.trendingSectionHeader}>
             <Text style={styles.trendingLabel}>DESTINOS POPULARES</Text>
-            <Text style={styles.trendingTitle}>Descubre Europa</Text>
+            <Text style={styles.trendingTitle}>Descubre el Mundo</Text>
           </View>
           
           <ScrollView
