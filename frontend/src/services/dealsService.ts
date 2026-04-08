@@ -30,6 +30,7 @@ export interface Deal {
   price: number | null;
   currency: string;
   url: string;
+  image_url: string | null;
   published_at: string | null;
   fetched_at: string;
   is_error_fare: boolean;

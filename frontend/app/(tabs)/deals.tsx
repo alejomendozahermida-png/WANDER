@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Linking,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -110,6 +111,15 @@ export default function DealsScreen() {
       </View>
 
       <Text style={styles.dealTitle} numberOfLines={3}>{item.title}</Text>
+
+      {/* Deal Image */}
+      {item.image_url ? (
+        <Image
+          source={{ uri: item.image_url }}
+          style={styles.dealImage}
+          resizeMode="cover"
+        />
+      ) : null}
 
       <View style={styles.dealFooter}>
         {item.price !== null && (
@@ -297,6 +307,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 22,
     marginBottom: Spacing.sm,
+  },
+  dealImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.surfaceMid,
   },
   dealFooter: {
     flexDirection: 'row',

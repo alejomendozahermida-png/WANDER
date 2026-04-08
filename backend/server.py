@@ -10,7 +10,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime
 import httpx
-import xml.etree.ElementTree as ET
+import feedparser
 import re
 import asyncio
 
@@ -134,7 +134,7 @@ def extract_cities_from_title(title: str) -> tuple:
 
 
 async def fetch_rss_feed(feed_config: dict) -> List[dict]:
-    """Fetch and parse a single RSS feed"""
+    """Fetch and parse a single RSS feed using feedparser"""
     deals = []
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as http_client:
@@ -148,63 +148,80 @@ async def fetch_rss_feed(feed_config: dict) -> List[dict]:
                 logger.warning(f"RSS feed {feed_config['name']} returned status {response.status_code}")
                 return deals
 
-            root = ET.fromstring(response.text)
+            content = response.text
             
-            # Handle both RSS 2.0 and Atom feeds
-            items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
+            # Skip if HTML
+            if '<html' in content[:500].lower() and '<?xml' not in content[:100]:
+                logger.warning(f"RSS {feed_config['name']}: Received HTML, skipping.")
+                return deals
+
+            # Use feedparser for robust RSS/Atom parsing
+            feed = feedparser.parse(content)
+            entries = feed.entries
+            logger.info(f"RSS {feed_config['name']}: feedparser found {len(entries)} entries")
             
-            for item in items[:20]:  # Limit to 20 items per feed
-                title_el = item.find('title') or item.find('{http://www.w3.org/2005/Atom}title')
-                link_el = item.find('link') or item.find('{http://www.w3.org/2005/Atom}link')
-                pub_date_el = item.find('pubDate') or item.find('{http://www.w3.org/2005/Atom}published')
-                desc_el = item.find('description') or item.find('{http://www.w3.org/2005/Atom}summary')
-                
-                title = title_el.text if title_el is not None and title_el.text else ""
-                link = link_el.text if link_el is not None and link_el.text else (link_el.get('href', '') if link_el is not None else "")
-                description = desc_el.text if desc_el is not None and desc_el.text else ""
-                
-                if not title:
+            for entry in entries[:20]:
+                try:
+                    title = getattr(entry, 'title', '') or ''
+                    link = getattr(entry, 'link', '') or ''
+                    description = getattr(entry, 'summary', '') or getattr(entry, 'description', '') or ''
+                    
+                    if not title:
+                        continue
+
+                    price = parse_price_from_text(title) or parse_price_from_text(description)
+                    origin, destination = extract_cities_from_title(title)
+
+                    tags = []
+                    title_lower = title.lower()
+                    if any(w in title_lower for w in ['error', 'mistake', 'glitch']):
+                        tags.append('error_fare')
+                    if any(w in title_lower for w in ['business', 'first class', 'premium']):
+                        tags.append('premium')
+                    if price and price < 100:
+                        tags.append('budget')
+                    if any(w in title_lower for w in ['round', 'roundtrip', 'ida y vuelta']):
+                        tags.append('roundtrip')
+
+                    published_at = None
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        try:
+                            import time
+                            published_at = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+                        except Exception:
+                            pass
+
+                    # Extract image from description/content
+                    image_url = None
+                    content_text = ''
+                    if hasattr(entry, 'content') and entry.content:
+                        content_text = entry.content[0].get('value', '')
+                    elif description:
+                        content_text = description
+                    
+                    img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', content_text)
+                    if img_match:
+                        image_url = img_match.group(1)
+
+                    deal = {
+                        "id": str(uuid.uuid4()),
+                        "source": feed_config["name"],
+                        "title": title[:300],
+                        "origin": origin,
+                        "destination": destination,
+                        "price": price,
+                        "currency": "EUR",
+                        "url": link,
+                        "image_url": image_url,
+                        "published_at": published_at,
+                        "fetched_at": datetime.utcnow(),
+                        "is_error_fare": feed_config.get("is_error_fare", False) or 'error_fare' in tags,
+                        "tags": tags,
+                    }
+                    deals.append(deal)
+                except Exception as item_err:
+                    logger.warning(f"RSS {feed_config['name']}: Error parsing entry: {item_err}")
                     continue
-
-                # Extract price and cities
-                price = parse_price_from_text(title) or parse_price_from_text(description)
-                origin, destination = extract_cities_from_title(title)
-
-                # Parse tags from title
-                tags = []
-                title_lower = title.lower()
-                if any(w in title_lower for w in ['error', 'mistake', 'glitch']):
-                    tags.append('error_fare')
-                if any(w in title_lower for w in ['business', 'first class', 'premium']):
-                    tags.append('premium')
-                if price and price < 100:
-                    tags.append('budget')
-                if any(w in title_lower for w in ['round', 'roundtrip', 'ida y vuelta']):
-                    tags.append('roundtrip')
-
-                published_at = None
-                if pub_date_el is not None and pub_date_el.text:
-                    try:
-                        from email.utils import parsedate_to_datetime
-                        published_at = parsedate_to_datetime(pub_date_el.text)
-                    except Exception:
-                        pass
-
-                deal = {
-                    "id": str(uuid.uuid4()),
-                    "source": feed_config["name"],
-                    "title": title[:300],
-                    "origin": origin,
-                    "destination": destination,
-                    "price": price,
-                    "currency": "EUR",
-                    "url": link,
-                    "published_at": published_at,
-                    "fetched_at": datetime.utcnow(),
-                    "is_error_fare": feed_config.get("is_error_fare", False) or 'error_fare' in tags,
-                    "tags": tags,
-                }
-                deals.append(deal)
 
     except Exception as e:
         logger.error(f"Error fetching RSS feed {feed_config['name']}: {e}")
@@ -218,17 +235,25 @@ async def refresh_all_feeds():
     tasks = [fetch_rss_feed(feed) for feed in RSS_FEEDS]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    for result in results:
+    for i, result in enumerate(results):
         if isinstance(result, list):
+            logger.info(f"Feed {RSS_FEEDS[i]['name']}: {len(result)} deals parsed")
             all_deals.extend(result)
         elif isinstance(result, Exception):
-            logger.error(f"Feed fetch error: {result}")
+            logger.error(f"Feed {RSS_FEEDS[i]['name']} error: {result}")
+        else:
+            logger.warning(f"Feed {RSS_FEEDS[i]['name']}: unexpected result type {type(result)}")
+    
+    logger.info(f"Total deals collected: {len(all_deals)}")
     
     if all_deals:
-        # Clear old deals and insert new ones
-        await db.deals.delete_many({})
-        await db.deals.insert_many(all_deals)
-        logger.info(f"Stored {len(all_deals)} deals from {len(RSS_FEEDS)} feeds")
+        try:
+            # Clear old deals and insert new ones
+            await db.deals.delete_many({})
+            await db.deals.insert_many(all_deals)
+            logger.info(f"Stored {len(all_deals)} deals in MongoDB")
+        except Exception as e:
+            logger.error(f"MongoDB insert error: {e}")
     
     return all_deals
 
