@@ -59,18 +59,23 @@ export default function ResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Conectando con aerolíneas...');
 
-  // Skeleton pulse animation - must be at top level (hooks rules)
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  // Loading animation - airplane float
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const dotAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!loading) return;
-    const pulse = Animated.loop(
+    const float = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
     );
-    pulse.start();
-    return () => pulse.stop();
+    const dots = Animated.loop(
+      Animated.timing(dotAnim, { toValue: 1, duration: 2000, useNativeDriver: true })
+    );
+    float.start();
+    dots.start();
+    return () => { float.stop(); dots.stop(); };
   }, [loading]);
 
   useEffect(() => {
@@ -120,22 +125,28 @@ export default function ResultsScreen() {
     }
   };
 
-  const renderLoadingSkeleton = () => {
+  const renderLoadingScreen = () => {
+    const translateY = floatAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, -15],
+    });
+    const rotate = dotAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '360deg'],
+    });
+
     return (
       <View style={styles.loadingContainer}>
+        <Animated.View style={{ transform: [{ translateY }] }}>
+          <Ionicons name="airplane" size={56} color={Colors.coral} />
+        </Animated.View>
+        <Text style={styles.loadingTitle}>Buscando tu destino ideal</Text>
         <Text style={styles.loadingText}>{loadingMessage}</Text>
-        <Text style={styles.loadingSubtext}>Esto puede tomar unos segundos</Text>
-        {[0, 1, 2].map(i => (
-          <Animated.View key={i} style={[styles.skeletonCard, { opacity: pulseAnim }]}>
-            <View style={styles.skeletonImage} />
-            <View style={styles.skeletonBody}>
-              <View style={[styles.skeletonLine, { width: '60%', height: 20 }]} />
-              <View style={[styles.skeletonLine, { width: '40%', height: 14, marginTop: 8 }]} />
-              <View style={[styles.skeletonLine, { width: '80%', height: 14, marginTop: 12 }]} />
-              <View style={[styles.skeletonLine, { width: '50%', height: 28, marginTop: 16 }]} />
-            </View>
-          </Animated.View>
-        ))}
+        <View style={styles.loadingDotsRow}>
+          <Animated.View style={[styles.loadingDot, { opacity: floatAnim }]} />
+          <Animated.View style={[styles.loadingDot, { opacity: floatAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.4, 1] }) }]} />
+          <Animated.View style={[styles.loadingDot, { opacity: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] }) }]} />
+        </View>
       </View>
     );
   };
@@ -143,7 +154,7 @@ export default function ResultsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        {renderLoadingSkeleton()}
+        {renderLoadingScreen()}
       </SafeAreaView>
     );
   }
@@ -312,18 +323,32 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  loadingTitle: {
+    ...Typography.h2,
+    color: Colors.onSurface,
+    marginTop: Spacing.xl,
+    textAlign: 'center',
   },
   loadingText: {
     ...Typography.body,
-    color: Colors.onSurfaceDim,
-    marginTop: Spacing.lg,
+    color: Colors.coral,
+    marginTop: Spacing.md,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  loadingSubtext: {
-    ...Typography.body,
-    color: Colors.onSurfaceDim,
-    marginTop: Spacing.sm,
-    fontSize: 13,
-    opacity: 0.7,
+  loadingDotsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: Spacing.xl,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.coral,
   },
   scrollView: {
     flex: 1,
@@ -483,25 +508,5 @@ const styles = StyleSheet.create({
     color: Colors.coral,
     marginLeft: Spacing.sm,
     fontSize: 16,
-  },
-  // Skeleton loader styles
-  skeletonCard: {
-    width: '90%',
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-  },
-  skeletonImage: {
-    width: '100%',
-    height: 140,
-    backgroundColor: Colors.surfaceMid,
-  },
-  skeletonBody: {
-    padding: Spacing.lg,
-  },
-  skeletonLine: {
-    backgroundColor: Colors.surfaceMid,
-    borderRadius: 6,
   },
 });
