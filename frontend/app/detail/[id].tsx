@@ -8,10 +8,12 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { useSearchStore } from '../../src/store/searchStore';
@@ -52,6 +54,7 @@ export default function DetailScreen() {
   }
 
   const handleSave = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsSaved(!isSaved);
     Alert.alert(
       isSaved ? 'Eliminado' : 'Guardado',
@@ -62,7 +65,18 @@ export default function DetailScreen() {
   };
 
   const handleBook = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.push(`/booking/${destination.id}`);
+  };
+
+  const handleToggleInsurance = (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setInsuranceEnabled(value);
+  };
+
+  const handleToggleEsim = (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEsimEnabled(value);
   };
 
   const calculateTotal = () => {
@@ -188,10 +202,7 @@ export default function DetailScreen() {
         <Card style={styles.addonsCard}>
           <Text style={styles.cardTitle}>Complementos</Text>
           
-          <TouchableOpacity
-            style={styles.addonRow}
-            onPress={() => setInsuranceEnabled(!insuranceEnabled)}
-          >
+          <View style={styles.addonRow}>
             <View style={styles.addonLeft}>
               <Text style={styles.addonEmoji}>🛡️</Text>
               <View style={styles.addonInfo}>
@@ -199,16 +210,16 @@ export default function DetailScreen() {
                 <Text style={styles.addonPrice}>desde 8€</Text>
               </View>
             </View>
-            <View style={[
-              styles.toggle,
-              insuranceEnabled && styles.toggleActive,
-            ]} />
-          </TouchableOpacity>
+            <Switch
+              value={insuranceEnabled}
+              onValueChange={handleToggleInsurance}
+              trackColor={{ false: Colors.surfaceMid, true: Colors.coral }}
+              thumbColor={Colors.white}
+              ios_backgroundColor={Colors.surfaceMid}
+            />
+          </View>
 
-          <TouchableOpacity
-            style={styles.addonRow}
-            onPress={() => setEsimEnabled(!esimEnabled)}
-          >
+          <View style={styles.addonRow}>
             <View style={styles.addonLeft}>
               <Text style={styles.addonEmoji}>📱</Text>
               <View style={styles.addonInfo}>
@@ -216,11 +227,14 @@ export default function DetailScreen() {
                 <Text style={styles.addonPrice}>5GB desde 5€</Text>
               </View>
             </View>
-            <View style={[
-              styles.toggle,
-              esimEnabled && styles.toggleActive,
-            ]} />
-          </TouchableOpacity>
+            <Switch
+              value={esimEnabled}
+              onValueChange={handleToggleEsim}
+              trackColor={{ false: Colors.surfaceMid, true: Colors.coral }}
+              thumbColor={Colors.white}
+              ios_backgroundColor={Colors.surfaceMid}
+            />
+          </View>
         </Card>
 
         <View style={{ height: 100 }} />
@@ -394,7 +408,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.surfaceMid,
   },
@@ -419,15 +433,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.onSurfaceDim,
     fontSize: 14,
-  },
-  toggle: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceMid,
-  },
-  toggleActive: {
-    backgroundColor: Colors.coral,
   },
   footer: {
     backgroundColor: Colors.surface,

@@ -143,52 +143,55 @@ export default function ResultsScreen() {
               
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.8)']}
-                locations={[0.4, 1]}
+                locations={[0.3, 1]}
                 style={styles.gradient}
               >
-                {/* Badge */}
+                {/* Badge - Top Left */}
                 <View style={[styles.badge, { backgroundColor: badge.color }]}>
                   <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
                   <Text style={styles.badgeText}>{badge.label}</Text>
                 </View>
 
-                {/* Visa Status */}
-                <View style={styles.visaContainer}>
-                  <Text style={styles.visaEmoji}>🇪🇺</Text>
-                  <Text style={styles.visaText}>
-                    {destination.visaFree ? 'Sin visa requerida' : 'Visa requerida'}
-                  </Text>
+                {/* Content Container - Bottom */}
+                <View style={styles.cardContent}>
+                  {/* Visa Status */}
+                  <View style={styles.visaContainer}>
+                    <Text style={styles.visaEmoji}>🇪🇺</Text>
+                    <Text style={styles.visaText}>
+                      {destination.visaFree ? 'Sin visa requerida' : 'Visa requerida'}
+                    </Text>
+                  </View>
+
+                  {/* City Name */}
+                  <Text style={styles.cityName}>{destination.city}</Text>
+                  <Text style={styles.countryName}>{destination.country}</Text>
+
+                  {/* Price Breakdown */}
+                  <View style={styles.priceContainer}>
+                    <View style={styles.priceRow}>
+                      <Ionicons name="airplane" size={16} color={Colors.white} />
+                      <Text style={styles.priceLabel}>Vuelo</Text>
+                      <Text style={styles.priceValue}>{destination.flightPrice}€</Text>
+                    </View>
+                    <View style={styles.priceRow}>
+                      <Ionicons name="bed" size={16} color={Colors.white} />
+                      <Text style={styles.priceLabel}>Alojamiento</Text>
+                      <Text style={styles.priceValue}>{destination.hotelPrice}€</Text>
+                    </View>
+                    <View style={[styles.priceRow, styles.priceTotalRow]}>
+                      <Text style={styles.priceTotalLabel}>Total</Text>
+                      <Text style={styles.priceTotalValue}>{destination.totalPrice}€</Text>
+                    </View>
+                  </View>
+
+                  {/* Arrow Button - Inside content */}
+                  <TouchableOpacity
+                    style={styles.arrowButton}
+                    onPress={() => router.push(`/detail/${destination.id}`)}
+                  >
+                    <Ionicons name="arrow-forward" size={24} color={Colors.white} />
+                  </TouchableOpacity>
                 </View>
-
-                {/* City Name */}
-                <Text style={styles.cityName}>{destination.city}</Text>
-                <Text style={styles.countryName}>{destination.country}</Text>
-
-                {/* Price Breakdown */}
-                <View style={styles.priceContainer}>
-                  <View style={styles.priceRow}>
-                    <Ionicons name="airplane" size={16} color={Colors.white} />
-                    <Text style={styles.priceLabel}>Vuelo</Text>
-                    <Text style={styles.priceValue}>{destination.flightPrice}€</Text>
-                  </View>
-                  <View style={styles.priceRow}>
-                    <Ionicons name="bed" size={16} color={Colors.white} />
-                    <Text style={styles.priceLabel}>Alojamiento</Text>
-                    <Text style={styles.priceValue}>{destination.hotelPrice}€</Text>
-                  </View>
-                  <View style={[styles.priceRow, styles.priceTotalRow]}>
-                    <Text style={styles.priceTotalLabel}>Total</Text>
-                    <Text style={styles.priceTotalValue}>{destination.totalPrice}€</Text>
-                  </View>
-                </View>
-
-                {/* Arrow Button */}
-                <TouchableOpacity
-                  style={styles.arrowButton}
-                  onPress={() => router.push(`/detail/${destination.id}`)}
-                >
-                  <Ionicons name="arrow-forward" size={24} color={Colors.white} />
-                </TouchableOpacity>
               </LinearGradient>
             </TouchableOpacity>
           );
@@ -280,7 +283,10 @@ const styles = StyleSheet.create({
   gradient: {
     ...StyleSheet.absoluteFillObject,
     padding: Spacing.lg,
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  cardContent: {
+    marginTop: 'auto',
   },
   badge: {
     position: 'absolute',
@@ -302,15 +308,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   visaContainer: {
-    position: 'absolute',
-    bottom: 220,
-    left: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.pill,
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.sm,
   },
   visaEmoji: {
     fontSize: 16,
@@ -370,15 +375,14 @@ const styles = StyleSheet.create({
     color: Colors.coral,
   },
   arrowButton: {
-    position: 'absolute',
-    bottom: Spacing.lg,
-    right: Spacing.lg,
+    alignSelf: 'flex-end',
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: Colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: Spacing.md,
   },
   searchAgainContainer: {
     alignItems: 'center',
