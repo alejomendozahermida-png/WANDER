@@ -177,27 +177,45 @@ backend:
 frontend:
   - task: "Duffel API Flight Search Integration"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/services/flightService.ts"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "Rewrote flightService.ts with: correct Duffel response field mapping (city_name, iata_country_code), ISO 8601 duration parser for all formats, date auto-adjustment for Duffel test API key, country code to name mapping, city images, visa checking, batch rate-limited search. Verified via Node.js test: CDG→LIS=130.56€, CDG→BCN=89.99€. TypeScript compiles clean."
+        - working: true
+          agent: "main"
+          comment: "Fixed syntax error (extra closing brace between line 245-247 causing TS1472). TypeScript compiles clean. Duffel returns rich flight details including airline, flight number, segments, departure/arrival times, duration, stops."
 
   - task: "Search Flow - Home to Results"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/app/results.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "Updated results.tsx to pass user homeAirportIata and passportCountry to searchDestinations. Added rotating loading messages during Duffel API calls. Removed fake 1.5s delay from home.tsx."
+        - working: true
+          agent: "main"
+          comment: "Updated results cards to show airline name (from flightDetails), flight duration and stops count. TypeScript compiles clean."
+
+  - task: "Flight Details UI (Expandable)"
+    implemented: true
+    working: true
+    file: "frontend/app/detail/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added expandable flight details section in detail screen. Shows outbound and inbound flights with airline, flight number, departure/arrival times/airports, duration, stops, aircraft. Fixed hardcoded '7 noches' to dynamic calc. Fixed hardcoded 'CDG' to use user homeAirportIata. TypeScript compiles clean."
 
   - task: "Search Destination Logic with Mood Filter"
     implemented: true

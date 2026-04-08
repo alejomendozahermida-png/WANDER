@@ -242,7 +242,6 @@ export const searchMultipleDestinations = async (
           };
 
           results.push(destination);
-          }
         }
       } catch (error: any) {
         const errMsg = error.response?.data?.errors?.[0]?.message || error.message;

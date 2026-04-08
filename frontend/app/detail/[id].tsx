@@ -22,16 +22,46 @@ import { useSearchStore } from '../../src/store/searchStore';
 import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Destination } from '../../src/types';
+import { Destination, FlightSegment } from '../../src/types';
 import { searchAccommodations, Accommodation } from '../../src/services/dealsService';
+import { useUserStore } from '../../src/store/userStore';
 
 const { height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.4;
+
+/** Format ISO datetime to readable time (e.g., "14:30") */
+const formatTime = (isoString: string): string => {
+  if (!isoString) return '--:--';
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch { return '--:--'; }
+};
+
+/** Format ISO datetime to readable date (e.g., "15 Abr") */
+const formatShortDate = (isoString: string): string => {
+  if (!isoString) return '';
+  try {
+    const d = new Date(isoString);
+    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+  } catch { return ''; }
+};
+
+/** Calculate trip nights */
+const calcNights = (dep: string, ret: string): number => {
+  try {
+    const d1 = new Date(dep);
+    const d2 = new Date(ret);
+    return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)));
+  } catch { return 7; }
+};
 
 export default function DetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { results } = useSearchStore();
+  const { user } = useUserStore();
   const [destination, setDestination] = useState<Destination | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [insuranceEnabled, setInsuranceEnabled] = useState(false);
@@ -39,6 +69,7 @@ export default function DetailScreen() {
   const [accommodations, setAccommodations] = useState<{ budget: Accommodation | null; midrange: Accommodation | null; premium: Accommodation | null } | null>(null);
   const [loadingAccom, setLoadingAccom] = useState(false);
   const [selectedAccom, setSelectedAccom] = useState<'budget' | 'midrange' | 'premium'>('budget');
+  const [expandedFlight, setExpandedFlight] = useState<'outbound' | 'inbound' | null>(null);
 
   useEffect(() => {
     // Find destination in results or trending
@@ -182,6 +213,154 @@ export default function DetailScreen() {
           </View>
         </View>
 
+        {/* Flight Details - Expandable */}
+        {destination.flightDetails && (
+          <Card style={styles.summaryCard}>
+            <Text style={styles.cardTitle}>Detalles del vuelo</Text>
+            <Text style={styles.flightAirlineMain}>
+              {destination.flightDetails.airline} - {destination.flightDetails.totalPrice}{destination.flightDetails.currency === 'GBP' ? '£' : '€'}
+            </Text>
+
+            {/* OUTBOUND flight */}
+            <TouchableOpacity
+              style={styles.flightToggle}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setExpandedFlight(expandedFlight === 'outbound' ? null : 'outbound');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.flightToggleLeft}>
+                <Ionicons name="airplane" size={18} color={Colors.coral} />
+                <View style={styles.flightToggleInfo}>
+                  <Text style={styles.flightToggleLabel}>Ida</Text>
+                  <Text style={styles.flightToggleRoute}>
+                    {destination.flightDetails.outbound.segments?.[0]?.departureAirport || (user?.homeAirportIata || 'CDG')} → {destination.iata}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.flightToggleRight}>
+                <Text style={styles.flightToggleDuration}>{destination.flightDetails.outbound.duration}</Text>
+                <Text style={styles.flightToggleStops}>
+                  {destination.flightDetails.outbound.stops === 0 ? 'Directo' : `${destination.flightDetails.outbound.stops} escala${destination.flightDetails.outbound.stops > 1 ? 's' : ''}`}
+                </Text>
+                <Ionicons
+                  name={expandedFlight === 'outbound' ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color={Colors.onSurfaceDim}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {expandedFlight === 'outbound' && destination.flightDetails.outbound.segments?.length > 0 && (
+              <View style={styles.segmentsList}>
+                {destination.flightDetails.outbound.segments.map((seg: FlightSegment, idx: number) => (
+                  <View key={idx} style={styles.segmentCard}>
+                    <View style={styles.segmentHeader}>
+                      <Text style={styles.segmentAirline}>{seg.airline}</Text>
+                      <Text style={styles.segmentFlightNum}>{seg.flightNumber}</Text>
+                    </View>
+                    <View style={styles.segmentRoute}>
+                      <View style={styles.segmentPoint}>
+                        <Text style={styles.segmentTime}>{formatTime(seg.departureTime)}</Text>
+                        <Text style={styles.segmentDate}>{formatShortDate(seg.departureTime)}</Text>
+                        <Text style={styles.segmentAirport}>{seg.departureAirport}</Text>
+                        {seg.departureName ? <Text style={styles.segmentCityName}>{seg.departureName}</Text> : null}
+                      </View>
+                      <View style={styles.segmentLine}>
+                        <View style={styles.segmentDot} />
+                        <View style={styles.segmentDash} />
+                        <Ionicons name="airplane" size={14} color={Colors.coral} />
+                        <View style={styles.segmentDash} />
+                        <View style={styles.segmentDot} />
+                      </View>
+                      <View style={[styles.segmentPoint, { alignItems: 'flex-end' }]}>
+                        <Text style={styles.segmentTime}>{formatTime(seg.arrivalTime)}</Text>
+                        <Text style={styles.segmentDate}>{formatShortDate(seg.arrivalTime)}</Text>
+                        <Text style={styles.segmentAirport}>{seg.arrivalAirport}</Text>
+                        {seg.arrivalName ? <Text style={styles.segmentCityName}>{seg.arrivalName}</Text> : null}
+                      </View>
+                    </View>
+                    <View style={styles.segmentFooter}>
+                      <Text style={styles.segmentDuration}>{seg.duration}</Text>
+                      {seg.aircraft ? <Text style={styles.segmentAircraft}>{seg.aircraft}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* INBOUND flight */}
+            <TouchableOpacity
+              style={[styles.flightToggle, { marginTop: Spacing.sm }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setExpandedFlight(expandedFlight === 'inbound' ? null : 'inbound');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.flightToggleLeft}>
+                <Ionicons name="airplane" size={18} color={Colors.teal} style={{ transform: [{ rotate: '180deg' }] }} />
+                <View style={styles.flightToggleInfo}>
+                  <Text style={styles.flightToggleLabel}>Vuelta</Text>
+                  <Text style={styles.flightToggleRoute}>
+                    {destination.iata} → {destination.flightDetails.inbound.segments?.[0]?.arrivalAirport || (user?.homeAirportIata || 'CDG')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.flightToggleRight}>
+                <Text style={styles.flightToggleDuration}>{destination.flightDetails.inbound.duration}</Text>
+                <Text style={styles.flightToggleStops}>
+                  {destination.flightDetails.inbound.stops === 0 ? 'Directo' : `${destination.flightDetails.inbound.stops} escala${destination.flightDetails.inbound.stops > 1 ? 's' : ''}`}
+                </Text>
+                <Ionicons
+                  name={expandedFlight === 'inbound' ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color={Colors.onSurfaceDim}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {expandedFlight === 'inbound' && destination.flightDetails.inbound.segments?.length > 0 && (
+              <View style={styles.segmentsList}>
+                {destination.flightDetails.inbound.segments.map((seg: FlightSegment, idx: number) => (
+                  <View key={idx} style={styles.segmentCard}>
+                    <View style={styles.segmentHeader}>
+                      <Text style={styles.segmentAirline}>{seg.airline}</Text>
+                      <Text style={styles.segmentFlightNum}>{seg.flightNumber}</Text>
+                    </View>
+                    <View style={styles.segmentRoute}>
+                      <View style={styles.segmentPoint}>
+                        <Text style={styles.segmentTime}>{formatTime(seg.departureTime)}</Text>
+                        <Text style={styles.segmentDate}>{formatShortDate(seg.departureTime)}</Text>
+                        <Text style={styles.segmentAirport}>{seg.departureAirport}</Text>
+                        {seg.departureName ? <Text style={styles.segmentCityName}>{seg.departureName}</Text> : null}
+                      </View>
+                      <View style={styles.segmentLine}>
+                        <View style={styles.segmentDot} />
+                        <View style={styles.segmentDash} />
+                        <Ionicons name="airplane" size={14} color={Colors.teal} />
+                        <View style={styles.segmentDash} />
+                        <View style={styles.segmentDot} />
+                      </View>
+                      <View style={[styles.segmentPoint, { alignItems: 'flex-end' }]}>
+                        <Text style={styles.segmentTime}>{formatTime(seg.arrivalTime)}</Text>
+                        <Text style={styles.segmentDate}>{formatShortDate(seg.arrivalTime)}</Text>
+                        <Text style={styles.segmentAirport}>{seg.arrivalAirport}</Text>
+                        {seg.arrivalName ? <Text style={styles.segmentCityName}>{seg.arrivalName}</Text> : null}
+                      </View>
+                    </View>
+                    <View style={styles.segmentFooter}>
+                      <Text style={styles.segmentDuration}>{seg.duration}</Text>
+                      {seg.aircraft ? <Text style={styles.segmentAircraft}>{seg.aircraft}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        )}
+
         {/* Trip Summary */}
         <Card style={styles.summaryCard}>
           <Text style={styles.cardTitle}>Resumen del viaje</Text>
@@ -190,7 +369,7 @@ export default function DetailScreen() {
             <View style={styles.summaryIcon}>
               <Ionicons name="airplane" size={20} color={Colors.coral} />
             </View>
-            <Text style={styles.summaryLabel}>Vuelo (CDG → {destination.iata})</Text>
+            <Text style={styles.summaryLabel}>Vuelo ({user?.homeAirportIata || 'CDG'} → {destination.iata})</Text>
             <Text style={styles.summaryValue}>{destination.flightPrice}€</Text>
           </View>
 
@@ -198,7 +377,7 @@ export default function DetailScreen() {
             <View style={styles.summaryIcon}>
               <Ionicons name="bed" size={20} color={Colors.coral} />
             </View>
-            <Text style={styles.summaryLabel}>Alojamiento (7 noches)</Text>
+            <Text style={styles.summaryLabel}>Alojamiento ({calcNights(destination.departureDate, destination.returnDate)} noches)</Text>
             <Text style={styles.summaryValue}>{destination.hotelPrice}€</Text>
           </View>
 
@@ -605,6 +784,149 @@ const styles = StyleSheet.create({
   accomCard: {
     marginHorizontal: Spacing.lg,
     marginTop: Spacing.md,
+  },
+  // Flight details styles
+  flightAirlineMain: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurfaceDim,
+    fontSize: 14,
+    marginBottom: Spacing.md,
+  },
+  flightToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceMid,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  flightToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  flightToggleInfo: {
+    marginLeft: Spacing.sm,
+  },
+  flightToggleLabel: {
+    ...Typography.label,
+    color: Colors.onSurfaceDim,
+    fontSize: 10,
+  },
+  flightToggleRoute: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 14,
+  },
+  flightToggleRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  flightToggleDuration: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 13,
+  },
+  flightToggleStops: {
+    fontSize: 11,
+    color: Colors.teal,
+    fontWeight: '600',
+  },
+  segmentsList: {
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  segmentCard: {
+    backgroundColor: Colors.surfaceMid,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.coral,
+  },
+  segmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  segmentAirline: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 13,
+  },
+  segmentFlightNum: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+    fontWeight: '600',
+  },
+  segmentRoute: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+  },
+  segmentPoint: {
+    alignItems: 'flex-start',
+    minWidth: 60,
+  },
+  segmentTime: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  segmentDate: {
+    fontSize: 11,
+    color: Colors.onSurfaceDim,
+    marginTop: 2,
+  },
+  segmentAirport: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.coral,
+    marginTop: 4,
+  },
+  segmentCityName: {
+    fontSize: 10,
+    color: Colors.onSurfaceDim,
+  },
+  segmentLine: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.sm,
+    gap: 4,
+  },
+  segmentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.onSurfaceDim,
+  },
+  segmentDash: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.onSurfaceDim,
+    opacity: 0.3,
+  },
+  segmentFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  segmentDuration: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+  },
+  segmentAircraft: {
+    fontSize: 11,
+    color: Colors.onSurfaceDim,
+    opacity: 0.7,
   },
   accomHeader: {
     flexDirection: 'row',

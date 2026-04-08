@@ -190,9 +190,18 @@ export default function ResultsScreen() {
                   <View style={styles.priceContainer}>
                     <View style={styles.priceRow}>
                       <Ionicons name="airplane" size={16} color={Colors.white} />
-                      <Text style={styles.priceLabel}>Vuelo</Text>
+                      <Text style={styles.priceLabel}>
+                        Vuelo{destination.flightDetails?.airline ? ` (${destination.flightDetails.airline})` : ''}
+                      </Text>
                       <Text style={styles.priceValue}>{destination.flightPrice}€</Text>
                     </View>
+                    {destination.flightDetails && (
+                      <View style={styles.flightMiniInfo}>
+                        <Text style={styles.flightMiniText}>
+                          {destination.flightDetails.outbound.duration} · {destination.flightDetails.outbound.stops === 0 ? 'Directo' : `${destination.flightDetails.outbound.stops} escala${destination.flightDetails.outbound.stops > 1 ? 's' : ''}`}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.priceRow}>
                       <Ionicons name="bed" size={16} color={Colors.white} />
                       <Text style={styles.priceLabel}>Alojamiento</Text>
@@ -384,6 +393,16 @@ const styles = StyleSheet.create({
   priceValue: {
     ...Typography.bodySemibold,
     color: Colors.white,
+  },
+  flightMiniInfo: {
+    marginLeft: 28,
+    marginBottom: Spacing.sm,
+    marginTop: -4,
+  },
+  flightMiniText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
   },
   priceTotalRow: {
     borderTopWidth: 1,
