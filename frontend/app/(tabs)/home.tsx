@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Calendar } from 'react-native-calendars';
 import { Button } from '../../src/components/Button';
 import { useUserStore } from '../../src/store/userStore';
 import { useSearchStore } from '../../src/store/searchStore';
@@ -19,7 +20,6 @@ import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/co
 import { MOODS } from '../../src/constants/moods';
 import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -33,10 +33,57 @@ export default function HomeScreen() {
   
   const [departureDate, setDepartureDate] = useState<Date | null>(null);
   const [returnDate, setReturnDate] = useState<Date | null>(null);
-  const [showDeparturePicker, setShowDeparturePicker] = useState(false);
-  const [showReturnPicker, setShowReturnPicker] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMode, setCalendarMode] = useState<'departure' | 'return'>('departure');
   const [currentMood, setCurrentMood] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  const handleDateSelect = (day: any) => {
+    const selectedDate = new Date(day.dateString);
+    
+    if (calendarMode === 'departure') {
+      setDepartureDate(selectedDate);
+      // Clear return date if it's before new departure date
+      if (returnDate && returnDate <= selectedDate) {
+        setReturnDate(null);
+      }
+    } else {
+      setReturnDate(selectedDate);
+    }
+    
+    setShowCalendar(false);
+  };
+
+  const openCalendar = (mode: 'departure' | 'return') => {
+    setCalendarMode(mode);
+    setShowCalendar(true);
+  };
+
+  const getMarkedDates = () => {
+    const marked: any = {};
+    
+    if (departureDate) {
+      const depKey = format(departureDate, 'yyyy-MM-dd');
+      marked[depKey] = {
+        selected: calendarMode === 'departure',
+        marked: true,
+        selectedColor: Colors.coral,
+        dotColor: Colors.coral,
+      };
+    }
+    
+    if (returnDate) {
+      const retKey = format(returnDate, 'yyyy-MM-dd');
+      marked[retKey] = {
+        selected: calendarMode === 'return',
+        marked: true,
+        selectedColor: Colors.teal,
+        dotColor: Colors.teal,
+      };
+    }
+    
+    return marked;
+  };
 
   const handleSearch = async () => {
     if (!departureDate || !returnDate || !currentMood) {
@@ -62,34 +109,6 @@ export default function HomeScreen() {
 
   const handleMoodSelect = (moodId: string) => {
     setCurrentMood(moodId);
-  };
-
-  const handleDepartureDateChange = (event: any, date?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDeparturePicker(false);
-    }
-    
-    if (event.type === 'set' && date) {
-      setDepartureDate(date);
-      // If return date is before new departure date, clear it
-      if (returnDate && returnDate <= date) {
-        setReturnDate(null);
-      }
-    } else if (event.type === 'dismissed') {
-      setShowDeparturePicker(false);
-    }
-  };
-
-  const handleReturnDateChange = (event: any, date?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowReturnPicker(false);
-    }
-    
-    if (event.type === 'set' && date) {
-      setReturnDate(date);
-    } else if (event.type === 'dismissed') {
-      setShowReturnPicker(false);
-    }
   };
 
   const canSearch = departureDate && returnDate && currentMood && returnDate > departureDate;
@@ -120,7 +139,7 @@ export default function HomeScreen() {
           <View style={styles.dateContainer}>
             <TouchableOpacity
               style={styles.dateButton}
-              onPress={() => setShowDeparturePicker(true)}
+              onPress={() => openCalendar('departure')}
             >
               <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
               <Text style={styles.dateLabel}>Salida</Text>
@@ -133,7 +152,7 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.dateButton}
-              onPress={() => setShowReturnPicker(true)}
+              onPress={() => openCalendar('return')}
             >
               <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
               <Text style={styles.dateLabel}>Regreso</Text>
@@ -213,96 +232,53 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Date Pickers - Android */}
-      {Platform.OS === 'android' && showDeparturePicker && (
-        <DateTimePicker
-          value={departureDate || new Date()}
-          mode="date"
-          display="default"
-          minimumDate={new Date()}
-          onChange={handleDepartureDateChange}
-        />
-      )}
-      {Platform.OS === 'android' && showReturnPicker && (
-        <DateTimePicker
-          value={returnDate || departureDate || new Date()}
-          mode="date"
-          display="default"
-          minimumDate={departureDate || new Date()}
-          onChange={handleReturnDateChange}
-        />
-      )}
-
-      {/* Date Pickers - iOS Modal */}
-      {Platform.OS === 'ios' && showDeparturePicker && (
-        <Modal
-          transparent
-          animationType="slide"
-          visible={showDeparturePicker}
-          onRequestClose={() => setShowDeparturePicker(false)}
+      {/* Calendar Modal */}
+      <Modal
+        visible={showCalendar}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCalendar(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCalendar(false)}
         >
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowDeparturePicker(false)}
-          >
-            <View style={styles.datePickerModal}>
-              <View style={styles.datePickerHeader}>
-                <TouchableOpacity onPress={() => setShowDeparturePicker(false)}>
-                  <Text style={styles.datePickerButton}>Cancelar</Text>
-                </TouchableOpacity>
-                <Text style={styles.datePickerTitle}>Fecha de salida</Text>
-                <TouchableOpacity onPress={() => setShowDeparturePicker(false)}>
-                  <Text style={[styles.datePickerButton, styles.datePickerButtonDone]}>Listo</Text>
-                </TouchableOpacity>
-              </View>
-              <DateTimePicker
-                value={departureDate || new Date()}
-                mode="date"
-                display="spinner"
-                minimumDate={new Date()}
-                onChange={handleDepartureDateChange}
-                textColor="#FFFFFF"
-              />
+          <View style={styles.calendarModal}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity onPress={() => setShowCalendar(false)}>
+                <Text style={styles.calendarButton}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={styles.calendarTitle}>
+                {calendarMode === 'departure' ? 'Fecha de Salida' : 'Fecha de Regreso'}
+              </Text>
+              <View style={{ width: 80 }} />
             </View>
-          </TouchableOpacity>
-        </Modal>
-      )}
-
-      {Platform.OS === 'ios' && showReturnPicker && (
-        <Modal
-          transparent
-          animationType="slide"
-          visible={showReturnPicker}
-          onRequestClose={() => setShowReturnPicker(false)}
-        >
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowReturnPicker(false)}
-          >
-            <View style={styles.datePickerModal}>
-              <View style={styles.datePickerHeader}>
-                <TouchableOpacity onPress={() => setShowReturnPicker(false)}>
-                  <Text style={styles.datePickerButton}>Cancelar</Text>
-                </TouchableOpacity>
-                <Text style={styles.datePickerTitle}>Fecha de regreso</Text>
-                <TouchableOpacity onPress={() => setShowReturnPicker(false)}>
-                  <Text style={[styles.datePickerButton, styles.datePickerButtonDone]}>Listo</Text>
-                </TouchableOpacity>
-              </View>
-              <DateTimePicker
-                value={returnDate || departureDate || new Date()}
-                mode="date"
-                display="spinner"
-                minimumDate={departureDate || new Date()}
-                onChange={handleReturnDateChange}
-                textColor="#FFFFFF"
-              />
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      )}
+            
+            <Calendar
+              onDayPress={handleDateSelect}
+              markedDates={getMarkedDates()}
+              minDate={calendarMode === 'departure' ? format(new Date(), 'yyyy-MM-dd') : format(departureDate || new Date(), 'yyyy-MM-dd')}
+              theme={{
+                backgroundColor: Colors.surface,
+                calendarBackground: Colors.surface,
+                textSectionTitleColor: Colors.onSurfaceDim,
+                selectedDayBackgroundColor: Colors.coral,
+                selectedDayTextColor: Colors.white,
+                todayTextColor: Colors.coral,
+                dayTextColor: Colors.onSurface,
+                textDisabledColor: Colors.onSurfaceDim,
+                monthTextColor: Colors.onSurface,
+                textMonthFontWeight: '600',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                arrowColor: Colors.coral,
+              }}
+              style={styles.calendar}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -492,13 +468,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
-  datePickerModal: {
+  calendarModal: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: BorderRadius.lg,
     borderTopRightRadius: BorderRadius.lg,
     paddingBottom: Spacing.xl,
   },
-  datePickerHeader: {
+  calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -507,16 +483,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.surfaceMid,
   },
-  datePickerTitle: {
+  calendarTitle: {
     ...Typography.h3,
     color: Colors.onSurface,
   },
-  datePickerButton: {
+  calendarButton: {
     ...Typography.bodySemibold,
-    color: Colors.onSurfaceDim,
+    color: Colors.coral,
     fontSize: 16,
   },
-  datePickerButtonDone: {
-    color: Colors.coral,
+  calendar: {
+    borderRadius: BorderRadius.md,
+    margin: Spacing.lg,
+  },
+  dateLabelDisabled: {
+    color: Colors.onSurfaceDim,
+    opacity: 0.5,
   },
 });

@@ -142,38 +142,46 @@ export const searchDestinations = async (
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 2000));
   
-  // Filter by budget
-  const withinBudget = TRENDING_DESTINATIONS.filter(d => d.totalPrice <= budgetMax);
+  // Filter by budget and ensure we have enough options
+  let withinBudget = TRENDING_DESTINATIONS.filter(d => d.totalPrice <= budgetMax);
   
-  // Score based on mood (simple mock logic)
+  // If we don't have enough within budget, add some slightly over budget
+  if (withinBudget.length < 3) {
+    const overBudget = TRENDING_DESTINATIONS
+      .filter(d => d.totalPrice > budgetMax)
+      .sort((a, b) => a.totalPrice - b.totalPrice);
+    withinBudget = [...withinBudget, ...overBudget].slice(0, 8);
+  }
+  
+  // Score based on mood
   const scored = withinBudget.map(dest => {
-    let score = Math.random();
+    let score = Math.random() * 0.5; // Base random score
     
     // Adjust score based on mood
     if (mood === 'party' && ['Barcelona', 'Lisbon', 'Athens'].includes(dest.city)) {
-      score += 0.3;
+      score += 0.4;
     }
-    if (mood === 'culture' && ['Rome', 'Athens', 'Prague'].includes(dest.city)) {
-      score += 0.3;
+    if (mood === 'culture' && ['Rome', 'Athens', 'Prague', 'Krakow'].includes(dest.city)) {
+      score += 0.4;
     }
     if (mood === 'relax' && ['Porto', 'Lisbon'].includes(dest.city)) {
-      score += 0.3;
+      score += 0.4;
     }
-    if (mood === 'nature' && ['Krakow', 'Budapest'].includes(dest.city)) {
-      score += 0.3;
+    if (mood === 'nature' && ['Krakow', 'Budapest', 'Porto'].includes(dest.city)) {
+      score += 0.4;
     }
     
     return { ...dest, score };
   });
   
-  // Sort by score and return top 3
+  // Sort by score and ALWAYS return exactly 3
   scored.sort((a, b) => b.score - a.score);
   const top3 = scored.slice(0, 3);
   
   // Assign badges
-  if (top3.length > 0) top3[0].badge = 'cheapest';
-  if (top3.length > 1) top3[1].badge = 'best-value';
-  if (top3.length > 2) top3[2].badge = 'hidden-gem';
+  top3[0].badge = 'cheapest';
+  top3[1].badge = 'best-value';
+  top3[2].badge = 'hidden-gem';
   
   return top3;
 };

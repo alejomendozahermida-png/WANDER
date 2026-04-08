@@ -193,6 +193,18 @@ export default function ResultsScreen() {
             </TouchableOpacity>
           );
         })}
+
+        {/* Search Again Button */}
+        <View style={styles.searchAgainContainer}>
+          <Text style={styles.searchAgainTitle}>¿Ninguno te convence?</Text>
+          <TouchableOpacity
+            style={styles.searchAgainButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="refresh" size={24} color={Colors.coral} />
+            <Text style={styles.searchAgainText}>Buscar de nuevo</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -367,5 +379,32 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchAgainContainer: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxxl,
+    paddingHorizontal: Spacing.lg,
+  },
+  searchAgainTitle: {
+    ...Typography.h3,
+    color: Colors.onSurfaceDim,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  searchAgainButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.pill,
+    borderWidth: 2,
+    borderColor: Colors.coral,
+  },
+  searchAgainText: {
+    ...Typography.bodySemibold,
+    color: Colors.coral,
+    marginLeft: Spacing.sm,
+    fontSize: 16,
   },
 });
