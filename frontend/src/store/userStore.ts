@@ -1,6 +1,41 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { supabase } from '../services/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PREFS_KEY = '@wander_user_prefs';
+
+// Fields that exist in Supabase profiles table
+const DB_FIELD_MAP: Record<string, string> = {
+  firstName: 'first_name',
+  nationality: 'nationality',
+  passportCountry: 'passport_country',
+  homeAirportIata: 'home_airport_iata',
+  homeCity: 'home_city',
+  budgetMin: 'budget_min',
+  budgetMax: 'budget_max',
+  travelStyle: 'travel_style',
+  travelsAlone: 'travels_alone',
+  onboardingComplete: 'onboarding_complete',
+};
+
+// New personalization fields stored locally
+const LOCAL_FIELDS = ['languages', 'travelExperience', 'travelCompanion', 'climatePref', 'topPriority', 'accomPreference'];
+
+async function saveLocalPrefs(prefs: Record<string, any>) {
+  try {
+    const existing = await AsyncStorage.getItem(PREFS_KEY);
+    const merged = { ...(existing ? JSON.parse(existing) : {}), ...prefs };
+    await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(merged));
+  } catch (e) { console.warn('Failed to save local prefs:', e); }
+}
+
+async function loadLocalPrefs(): Promise<Record<string, any>> {
+  try {
+    const val = await AsyncStorage.getItem(PREFS_KEY);
+    return val ? JSON.parse(val) : {};
+  } catch { return {}; }
+}
 
 interface UserState {
   user: User | null;
@@ -33,32 +68,33 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (!currentUser) return;
 
     try {
-      // Convert camelCase to snake_case for database
+      // Split into DB fields and local fields
       const dbUpdates: any = {};
-      if (updates.firstName !== undefined) dbUpdates.first_name = updates.firstName;
-      if (updates.nationality !== undefined) dbUpdates.nationality = updates.nationality;
-      if (updates.passportCountry !== undefined) dbUpdates.passport_country = updates.passportCountry;
-      if (updates.homeAirportIata !== undefined) dbUpdates.home_airport_iata = updates.homeAirportIata;
-      if (updates.homeCity !== undefined) dbUpdates.home_city = updates.homeCity;
-      if (updates.budgetMin !== undefined) dbUpdates.budget_min = updates.budgetMin;
-      if (updates.budgetMax !== undefined) dbUpdates.budget_max = updates.budgetMax;
-      if (updates.travelStyle !== undefined) dbUpdates.travel_style = updates.travelStyle;
-      if (updates.travelsAlone !== undefined) dbUpdates.travels_alone = updates.travelsAlone;
-      if (updates.onboardingComplete !== undefined) dbUpdates.onboarding_complete = updates.onboardingComplete;
-      // New personalization fields
-      if (updates.languages !== undefined) dbUpdates.languages = updates.languages;
-      if (updates.travelExperience !== undefined) dbUpdates.travel_experience = updates.travelExperience;
-      if (updates.travelCompanion !== undefined) dbUpdates.travel_companion = updates.travelCompanion;
-      if (updates.climatePref !== undefined) dbUpdates.climate_pref = updates.climatePref;
-      if (updates.topPriority !== undefined) dbUpdates.top_priority = updates.topPriority;
-      if (updates.accomPreference !== undefined) dbUpdates.accom_preference = updates.accomPreference;
+      const localUpdates: any = {};
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(dbUpdates)
-        .eq('id', currentUser.id);
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === undefined) continue;
+        if (DB_FIELD_MAP[key]) {
+          dbUpdates[DB_FIELD_MAP[key]] = value;
+        } else if (LOCAL_FIELDS.includes(key)) {
+          localUpdates[key] = value;
+        }
+      }
 
-      if (error) throw error;
+      // Update Supabase (only DB fields)
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await supabase
+          .from('profiles')
+          .update(dbUpdates)
+          .eq('id', currentUser.id);
+
+        if (error) throw error;
+      }
+
+      // Save new personalization fields locally
+      if (Object.keys(localUpdates).length > 0) {
+        await saveLocalPrefs(localUpdates);
+      }
 
       set((state) => ({
         user: state.user ? { ...state.user, ...updates } : null,
@@ -101,13 +137,24 @@ export const useUserStore = create<UserState>((set, get) => ({
             travelStyle: profile.travel_style || [],
             travelsAlone: profile.travels_alone || false,
             onboardingComplete: profile.onboarding_complete || false,
-            languages: profile.languages || [],
-            travelExperience: profile.travel_experience || 'beginner',
-            travelCompanion: profile.travel_companion || 'solo',
-            climatePref: profile.climate_pref || 'any',
-            topPriority: profile.top_priority || 'price',
-            accomPreference: profile.accom_preference || 'budget_hotel',
+            // Load local personalization prefs
+            languages: [] as string[],
+            travelExperience: 'beginner' as const,
+            travelCompanion: 'solo' as const,
+            climatePref: 'any' as const,
+            topPriority: 'price' as const,
+            accomPreference: 'budget_hotel' as const,
           };
+
+          // Merge with locally stored preferences
+          const localPrefs = await loadLocalPrefs();
+          if (localPrefs.languages) userData.languages = localPrefs.languages;
+          if (localPrefs.travelExperience) userData.travelExperience = localPrefs.travelExperience;
+          if (localPrefs.travelCompanion) userData.travelCompanion = localPrefs.travelCompanion;
+          if (localPrefs.climatePref) userData.climatePref = localPrefs.climatePref;
+          if (localPrefs.topPriority) userData.topPriority = localPrefs.topPriority;
+          if (localPrefs.accomPreference) userData.accomPreference = localPrefs.accomPreference;
+
           set({ user: userData, isAuthenticated: true, isLoading: false });
         } else {
           set({ user: null, isAuthenticated: false, isLoading: false });
