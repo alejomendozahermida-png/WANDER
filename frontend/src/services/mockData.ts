@@ -1,9 +1,31 @@
 import { Destination } from '../types';
 import { searchMultipleDestinations, POPULAR_EU_DESTINATIONS } from './flightService';
-import visaRules from '../assets/visa_rules.json';
+import { smartSearch } from './searchAlgorithm';
+import { GLOBAL_DESTINATIONS } from '../data/globalDestinations';
 
-// Mock popular European destinations for students
-export const TRENDING_DESTINATIONS: Destination[] = [
+// Trending destinations from global database (first 8 popular ones)
+const TRENDING_IATAS = ['LIS', 'BCN', 'BKK', 'RAK', 'PRG', 'MEX', 'DPS', 'FCO'];
+export const TRENDING_DESTINATIONS: Destination[] = GLOBAL_DESTINATIONS
+  .filter(d => TRENDING_IATAS.includes(d.iata))
+  .map((d, i) => ({
+    id: String(i + 1),
+    city: d.city,
+    country: d.country,
+    iata: d.iata,
+    flightPrice: [89, 95, 180, 65, 78, 220, 250, 115][i] || 100,
+    hotelPrice: [120, 140, 45, 80, 95, 60, 50, 155][i] || 100,
+    totalPrice: [209, 235, 225, 145, 173, 280, 300, 270][i] || 200,
+    departureDate: '2025-08-15',
+    returnDate: '2025-08-22',
+    imageUrl: d.imageUrl,
+    temperature: d.avgTemps.summer,
+    flightDuration: ['2h 30m', '2h 15m', '11h 20m', '3h 00m', '2h 00m', '10h 30m', '13h 00m', '2h 45m'][i] || '3h',
+    costOfLiving: d.costOfLivingIndex <= 3 ? 'Low' : d.costOfLivingIndex <= 6 ? 'Medium' : 'High',
+    visaFree: true,
+  }));
+
+// Legacy trending list for backwards compatibility
+const LEGACY_TRENDING: Destination[] = [
   {
     id: '1',
     city: 'Lisbon',
@@ -134,7 +156,7 @@ export const TRENDING_DESTINATIONS: Destination[] = [
   },
 ];
 
-// Function to search destinations with REAL Duffel API
+// Function to search destinations with SMART GLOBAL ALGORITHM + Duffel API
 export const searchDestinations = async (
   departureDate: string,
   returnDate: string,
@@ -144,62 +166,38 @@ export const searchDestinations = async (
   passportCountry?: string
 ): Promise<Destination[]> => {
   try {
-    // Select destinations based on mood
-    let destinationsToSearch = [...POPULAR_EU_DESTINATIONS];
-    
-    // Mood-based filtering
-    if (mood === 'party') {
-      destinationsToSearch = ['BCN', 'LIS', 'MAD', 'ATH', 'BER', 'AMS', 'PRG', 'OPO'];
-    } else if (mood === 'culture') {
-      destinationsToSearch = ['FCO', 'ATH', 'PRG', 'VIE', 'KRK', 'MAD', 'LIS', 'BER'];
-    } else if (mood === 'relax') {
-      destinationsToSearch = ['LIS', 'OPO', 'ATH', 'BCN', 'MAD'];
-    } else if (mood === 'nature') {
-      destinationsToSearch = ['KRK', 'BUD', 'OPO', 'VIE', 'PRG'];
-    }
+    console.log(`[Search] Smart global search: mood=${mood}, origin=${originIata}, budget=${budgetMax}€, passport=${passportCountry}`);
 
-    // Remove origin from search destinations to avoid searching same city
-    destinationsToSearch = destinationsToSearch.filter(d => d !== originIata);
-
-    console.log(`[Search] Mood: ${mood}, Origin: ${originIata}, Budget: ${budgetMax}€, Destinations: ${destinationsToSearch.length}`);
-
-    // Search using Duffel API
-    const results = await searchMultipleDestinations(
+    // Use the smart search algorithm
+    const results = await smartSearch({
       originIata,
-      destinationsToSearch,
       departureDate,
       returnDate,
+      mood,
       budgetMax,
-      passportCountry
-    );
+      passportCountry,
+    });
 
-    // If we got less than 3, supplement with mock data
+    // If we got less than 3, supplement with trending data
     if (results.length < 3) {
-      console.log(`[Search] Only ${results.length} Duffel results, supplementing with mock data`);
-      const existingIds = results.map(r => r.iata);
-      const mockResults = TRENDING_DESTINATIONS
-        .filter(d => !existingIds.includes(d.iata) && d.iata !== originIata)
-        .sort((a, b) => a.totalPrice - b.totalPrice)
+      console.log(`[Search] Only ${results.length} results, supplementing with trending data`);
+      const existingIatas = results.map(r => r.iata);
+      const supplements = TRENDING_DESTINATIONS
+        .filter(d => !existingIatas.includes(d.iata) && d.iata !== originIata)
         .slice(0, 3 - results.length)
-        .map((d, i) => ({
-          ...d,
-          departureDate,
-          returnDate,
-          badge: undefined as any,
-        }));
+        .map(d => ({ ...d, departureDate, returnDate }));
       
-      const combined = [...results, ...mockResults].slice(0, 3);
-      // Re-assign badges
-      if (combined.length > 0) combined[0].badge = 'cheapest';
-      if (combined.length > 1) combined[1].badge = 'best-value';
-      if (combined.length > 2) combined[2].badge = 'hidden-gem';
+      const combined = [...results, ...supplements].slice(0, 3);
+      if (combined.length > 0 && !combined.find(c => c.badge === 'cheapest')) combined[0].badge = 'cheapest';
+      if (combined.length > 1 && !combined.find(c => c.badge === 'best-value')) combined[1].badge = 'best-value';
+      if (combined.length > 2 && !combined.find(c => c.badge === 'hidden-gem')) combined[2].badge = 'hidden-gem';
       return combined;
     }
 
-    return results.slice(0, 3);
+    return results;
   } catch (error) {
-    console.error('[Search] Error searching destinations:', error);
-    // Fallback to mock data if API fails
+    console.error('[Search] Error in smart search:', error);
+    // Fallback to mock data if everything fails
     return searchDestinationsMock(departureDate, returnDate, mood, budgetMax);
   }
 };
