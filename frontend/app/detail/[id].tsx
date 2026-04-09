@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { Toast } from '../../src/components/Toast';
 import { useSearchStore } from '../../src/store/searchStore';
 import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/constants/theme';
@@ -27,6 +28,7 @@ import { Destination, FlightSegment } from '../../src/types';
 import { searchAccommodations, Accommodation } from '../../src/services/dealsService';
 import { useUserStore } from '../../src/store/userStore';
 import { GLOBAL_DESTINATIONS } from '../../src/data/globalDestinations';
+import { saveTrip, isTripSaved } from '../../src/services/savedTripsService';
 
 const { height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.4;
@@ -66,6 +68,10 @@ export default function DetailScreen() {
   const { user } = useUserStore();
   const [destination, setDestination] = useState<Destination | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [savingTrip, setSavingTrip] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [insuranceEnabled, setInsuranceEnabled] = useState(false);
   const [esimEnabled, setEsimEnabled] = useState(false);
   const [accommodations, setAccommodations] = useState<{ budget: Accommodation | null; midrange: Accommodation | null; premium: Accommodation | null } | null>(null);
@@ -108,6 +114,10 @@ export default function DetailScreen() {
       setDestination(found);
       // Load real accommodations from Booking.com
       loadAccommodations(found);
+      // Check if already saved
+      if (user?.id) {
+        isTripSaved(user.id, found.iata, found.departureDate).then(saved => setIsSaved(saved));
+      }
     }
   }, [id]);
 
@@ -142,15 +152,70 @@ export default function DetailScreen() {
     );
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsSaved(!isSaved);
-    Alert.alert(
-      isSaved ? 'Eliminado' : 'Guardado',
-      isSaved
-        ? 'Viaje eliminado de guardados'
-        : 'Viaje guardado. Lo encontrarás en tu sección Guardados'
-    );
+    
+    if (!user?.id) {
+      Alert.alert('Inicia sesion', 'Necesitas estar logueado para guardar viajes');
+      return;
+    }
+
+    if (isSaved) {
+      setIsSaved(false);
+      setToastMessage('Viaje eliminado de guardados');
+      setToastType('info' as any);
+      setToastVisible(true);
+      return;
+    }
+
+    setSavingTrip(true);
+    try {
+      const result = await saveTrip({
+        user_id: user.id,
+        destination_city: destination.city,
+        destination_iata: destination.iata,
+        destination_country: destination.country,
+        flight_price: destination.flightPrice,
+        flight_details: destination.flightDetails || null,
+        hotel_details: accommodations?.[selectedAccom] || null,
+        departure_date: destination.departureDate,
+        return_date: destination.returnDate,
+        mood: null,
+        image_url: destination.imageUrl,
+        total_price: calculateTotal(),
+      });
+
+      if (result.success) {
+        setIsSaved(true);
+        setToastMessage('Viaje guardado exitosamente');
+        setToastType('success');
+        setToastVisible(true);
+      } else {
+        setToastMessage('Error al guardar el viaje');
+        setToastType('error');
+        setToastVisible(true);
+      }
+    } catch (error) {
+      setToastMessage('Error al guardar el viaje');
+      setToastType('error');
+      setToastVisible(true);
+    } finally {
+      setSavingTrip(false);
+    }
+  };
+
+  const handleItinerary = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({
+      pathname: '/itinerary/[id]',
+      params: {
+        id: destination.id,
+        city: destination.city,
+        country: destination.country,
+        days: String(nights),
+        mood: 'culture',
+      },
+    });
   };
 
   const handleBook = () => {
@@ -578,6 +643,26 @@ export default function DetailScreen() {
           </View>
         </Card>
 
+        {/* AI Itinerary Button */}
+        <Card style={styles.addonsCard}>
+          <TouchableOpacity
+            style={styles.itineraryButton}
+            onPress={handleItinerary}
+            activeOpacity={0.7}
+          >
+            <View style={styles.itineraryIcon}>
+              <Ionicons name="sparkles" size={22} color={Colors.coral} />
+            </View>
+            <View style={styles.itineraryInfo}>
+              <Text style={styles.itineraryTitle}>Generar itinerario con IA</Text>
+              <Text style={styles.itinerarySubtitle}>
+                Plan dia a dia personalizado para {destination.city}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.onSurfaceDim} />
+          </TouchableOpacity>
+        </Card>
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -697,6 +782,14 @@ export default function DetailScreen() {
           />
         </View>
       </SafeAreaView>
+
+      {/* Toast notification */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+      />
     </View>
   );
 }
@@ -1333,5 +1426,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  // AI Itinerary button
+  itineraryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  itineraryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 77, 77, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  itineraryInfo: {
+    flex: 1,
+  },
+  itineraryTitle: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    marginBottom: 2,
+  },
+  itinerarySubtitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
   },
 });

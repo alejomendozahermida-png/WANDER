@@ -174,6 +174,51 @@ backend:
           agent: "testing"
           comment: "✅ NEW Currency Exchange API working perfectly. Tested: GET /api/currency/rates returns exchange rates for EUR to USD,GBP,MXN,BRL (1.42s response). GET /api/currency/convert properly converts EUR to USD with correct rate and result (0.32s response). All required fields present in responses."
 
+  - task: "AI Destinations API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Implemented POST /api/ai/destinations using emergentintegrations + Claude. Manually tested: returns 3 destinations with city, country, iata, why, estimated_flight_budget, vibe_tags, best_season, student_tip. Fallback to searchAlgorithm if AI fails."
+        - working: true
+          agent: "testing"
+          comment: "✅ AI Destinations API working perfectly! Comprehensive testing completed: (1) Party mood: Budapest, Praga, Lisboa in 8.0s, (2) Relax mood: Lisboa, Budapest, Praga in 8.9s, (3) Culture mood: Praga, Budapest, Cracovia in 10.3s, (4) Nature mood: Oslo, Sofia, Lisboa in 8.6s. All responses contain required fields: city, country, iata, why, estimated_flight_budget, vibe_tags, best_season, student_tip. Claude AI integration via emergentintegrations working correctly with 8-10 second response times."
+
+  - task: "AI Itinerary API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Implemented POST /api/ai/itinerary using emergentintegrations + Claude. Manually tested: returns structured day-by-day itinerary with activities (time, title, description, type, cost, location, insider_tip). Includes local_tips array."
+        - working: true
+          agent: "testing"
+          comment: "✅ AI Itinerary API working perfectly! Tested Barcelona 3-day itinerary generation in 32.1s. Response contains all required fields: city, total_days, days array with proper structure (day, title, activities), and local_tips array with 5 tips. Each activity includes: time, title, description, type, cost, location, insider_tip. Claude AI integration via emergentintegrations working correctly with realistic response times (15-30s as expected)."
+
+  - task: "European Subsidies Calculator API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Implemented GET /api/subsidies/calculate. Returns list of European travel subsidies (DiscoverEU, Erasmus+, etc.) filtered by user profile (age, student status, country). Calculates total_potential_savings and applicable_count."
+        - working: true
+          agent: "testing"
+          comment: "✅ European Subsidies Calculator API working perfectly! Comprehensive testing completed: (1) Basic test (age=22, student=true, FR): 6 subsidies found, 3 applicable, €620 potential savings, (2) Age 17 test: correctly excluded DiscoverEU (age requirement), (3) Germany with Erasmus: 3 applicable subsidies, €395 savings, (4) Non-student test: 3 applicable subsidies, €270 savings, (5) Missing parameters: handled with defaults. All responses contain required fields: subsidies array (name, description, amount, applies, apply_url, next_deadline), total_potential_savings, applicable_count. Logic correctly filters by age, student status, country, and Erasmus requirements."
+
 frontend:
   - task: "Duffel API Flight Search Integration"
     implemented: true
@@ -312,10 +357,7 @@ metadata:
   run_ui: true
 
 test_plan:
-  current_focus:
-    - "Duffel API Flight Search Integration"
-    - "Search Flow - Home to Results"
-    - "Search Destination Logic with Mood Filter"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -327,6 +369,10 @@ agent_communication:
       message: "✅ BACKEND TESTING COMPLETE - All 3 backend tasks are working correctly! Comprehensive testing performed on all RSS Deal Aggregator, Notifications, and Alert Preferences APIs. All endpoints return proper JSON responses with correct status codes. RSS feeds: 3/4 working (Secret Flying returns HTML instead of RSS, causing expected parsing errors), but API handles failures gracefully. Created backend_test.py with full test suite. Database persistence confirmed. No critical issues found. All backend functionality is production-ready."
     - agent: "testing"
       message: "✅ NEW ENDPOINTS TESTING COMPLETE - All 5 NEW endpoints working perfectly! Tested: (1) GET /api/ health check returns 'Wander API v2.0', (2) GET /api/accommodations/search for Lisbon & Bangkok - both return 3 categories (budget/midrange/premium) with all required fields via real Booking.com API (1.79s & 2.13s response times), (3) GET /api/currency/rates returns EUR to USD,GBP,MXN,BRL rates (1.42s), (4) GET /api/currency/convert EUR→USD works correctly (0.32s). All response structures match requirements. RapidAPI integration working. Created new_endpoints_test.py with comprehensive test suite."
+    - agent: "main"
+      message: "NEW: Implemented 3 new backend endpoints that need testing: (1) POST /api/ai/destinations - AI-powered destination recommendations using Claude via emergentintegrations. Tested manually: returns 3 destinations with city, country, iata, why, estimated_flight_budget, vibe_tags, best_season, student_tip. (2) POST /api/ai/itinerary - AI-generated day-by-day itinerary. Tested manually: returns structured days with activities including time, title, description, type, cost, location, insider_tip. (3) GET /api/subsidies/calculate - European travel subsidies calculator. Tested manually: returns subsidies array with name, description, amount, applies, apply_url, next_deadline, total_potential_savings, applicable_count. All 3 endpoints respond with 200 OK. Please verify with various input parameters and edge cases."
+    - agent: "testing"
+      message: "✅ AI ENDPOINTS TESTING COMPLETE - All 3 NEW AI endpoints working perfectly! Comprehensive testing performed: (1) POST /api/ai/destinations tested with 4 different moods (party, relax, culture, nature) - all return 3 destinations with required fields in 8-10 seconds, (2) POST /api/ai/itinerary tested with Barcelona 3-day generation in 32.1s - proper structure with days, activities, local tips, (3) GET /api/subsidies/calculate tested with multiple scenarios including edge cases (age 17, different countries, Erasmus status) - correctly filters and calculates savings. Claude AI integration via emergentintegrations working correctly. Created ai_endpoints_test.py with full test suite. 100% success rate (10/10 tests passed). All backend functionality is production-ready."
 
 test_credentials:
   note: "No fixed test credentials - users register through the app's Register screen with email/password via Supabase Auth"

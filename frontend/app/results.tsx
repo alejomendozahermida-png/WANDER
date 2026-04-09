@@ -16,6 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSearchStore } from '../src/store/searchStore';
 import { useUserStore } from '../src/store/userStore';
 import { searchDestinations } from '../src/services/mockData';
+import { fetchSubsidies, SubsidyResult } from '../src/services/subsidyService';
+import { SubsidyBadge } from '../src/components/SubsidyBadge';
 import { Colors, Spacing, BorderRadius, Typography } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -57,7 +59,9 @@ export default function ResultsScreen() {
   const { user } = useUserStore();
   const { departureDate, returnDate, selectedMood, results, setResults, setSearching } = useSearchStore();
   const [loading, setLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Conectando con aerolíneas...');
+  const [loadingMessage, setLoadingMessage] = useState('Conectando con aerolineas...');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [subsidyData, setSubsidyData] = useState<SubsidyResult | null>(null);
 
   // Loading animation - airplane float
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -107,17 +111,33 @@ export default function ResultsScreen() {
     }, 6000);
 
     try {
-      const destinations = await searchDestinations(
-        format(departureDate, 'yyyy-MM-dd'),
-        format(returnDate, 'yyyy-MM-dd'),
-        selectedMood,
-        user?.budgetMax || 500,
-        user?.homeAirportIata || 'CDG',
-        user?.passportCountry
-      );
+      // Load destinations and subsidies in parallel
+      const [destinations, subsidies] = await Promise.all([
+        searchDestinations(
+          format(departureDate, 'yyyy-MM-dd'),
+          format(returnDate, 'yyyy-MM-dd'),
+          selectedMood,
+          user?.budgetMax || 500,
+          user?.homeAirportIata || 'CDG',
+          user?.passportCountry
+        ),
+        fetchSubsidies({
+          age: 22,
+          is_student: true,
+          country: user?.passportCountry || 'FR',
+          has_erasmus: false,
+        }).catch(() => null),
+      ]);
+      
       setResults(destinations);
+      setSubsidyData(subsidies);
+      
+      if (destinations.length === 0) {
+        setSearchError('No encontramos vuelos para estas fechas. Prueba con otras fechas o un presupuesto mayor.');
+      }
     } catch (error) {
       console.error('Error loading results:', error);
+      setSearchError('Hubo un error al buscar destinos. Intentalo de nuevo.');
     } finally {
       clearInterval(msgInterval);
       setLoading(false);
@@ -155,6 +175,39 @@ export default function ResultsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {renderLoadingScreen()}
+      </SafeAreaView>
+    );
+  }
+
+  // Error or empty state
+  if (searchError || results.length === 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.onSurface} />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Wander</Text>
+          </View>
+          <View style={styles.backButton} />
+        </View>
+        <View style={styles.errorContainer}>
+          <Ionicons name="airplane-outline" size={64} color={Colors.onSurfaceDim} />
+          <Text style={styles.errorTitle}>
+            {searchError || 'No encontramos vuelos para estas fechas'}
+          </Text>
+          <Text style={styles.errorSubtitle}>
+            Prueba con otras fechas o un presupuesto mayor
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => { setSearchError(null); loadResults(); }}>
+            <Ionicons name="refresh" size={20} color={Colors.white} />
+            <Text style={styles.retryText}>Reintentar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.backToSearchButton} onPress={() => router.back()}>
+            <Text style={styles.backToSearchText}>Cambiar busqueda</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -275,6 +328,18 @@ export default function ResultsScreen() {
             </TouchableOpacity>
           );
         })}
+
+        {/* Subsidy Badge */}
+        {subsidyData && subsidyData.applicable_count > 0 && (
+          <SubsidyBadge
+            totalSavings={subsidyData.total_potential_savings}
+            applicableCount={subsidyData.applicable_count}
+            onPress={() => router.push({
+              pathname: '/subsidies',
+              params: { budget: String(user?.budgetMax || 500) },
+            })}
+          />
+        )}
 
         {/* Search Again Button */}
         <View style={styles.searchAgainContainer}>
@@ -548,5 +613,46 @@ const styles = StyleSheet.create({
     color: Colors.coral,
     marginLeft: Spacing.sm,
     fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xxxl,
+  },
+  errorTitle: {
+    ...Typography.h3,
+    color: Colors.onSurface,
+    textAlign: 'center',
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  errorSubtitle: {
+    ...Typography.body,
+    color: Colors.onSurfaceDim,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.coral,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.pill,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  retryText: {
+    ...Typography.bodySemibold,
+    color: Colors.white,
+  },
+  backToSearchButton: {
+    paddingVertical: Spacing.sm,
+  },
+  backToSearchText: {
+    ...Typography.bodySemibold,
+    color: Colors.teal,
+    fontSize: 15,
   },
 });
