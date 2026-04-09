@@ -777,6 +777,248 @@ async def convert_currency(amount: float, from_currency: str = "EUR", to_currenc
         logger.error(f"Currency convert error: {e}")
         return {"error": str(e)}
 
+# ==================== AI ENDPOINTS (Claude via Emergent LLM) ====================
+
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+import json as json_module
+
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+
+class AIDestinationRequest(BaseModel):
+    mood: str
+    budget_max: float = 500
+    origin: str = "CDG"
+    departure_date: str = ""
+    return_date: str = ""
+    languages: List[str] = []
+    travel_experience: str = "beginner"
+    travel_companion: str = "solo"
+    climate_pref: str = "any"
+    top_priority: str = "price"
+
+class AIItineraryRequest(BaseModel):
+    city: str
+    country: str = ""
+    trip_days: int = 3
+    mood: str = "culture"
+    budget_level: str = "student"
+
+@api_router.post("/ai/destinations")
+async def ai_destinations(req: AIDestinationRequest):
+    """Use Claude to suggest personalized destinations"""
+    if not EMERGENT_LLM_KEY:
+        return {"error": "LLM key not configured", "destinations": []}
+    
+    try:
+        system_prompt = """Eres un experto en viajes para jovenes europeos (18-30 anos). Tu rol es recomendar destinos reales, concretos y alcanzables segun el perfil del usuario. 
+        
+REGLAS:
+- Responde SOLO con JSON valido, sin texto adicional, sin bloques de codigo
+- Recomienda exactamente 3 destinos
+- Usa codigos IATA reales
+- Los precios estimados deben ser realistas para vuelos desde Europa
+- Adapta las recomendaciones al mood, presupuesto y preferencias del usuario
+- Incluye destinos variados (no 3 del mismo pais)"""
+
+        user_prompt = f"""Perfil del viajero:
+- Mood: {req.mood}
+- Presupuesto max vuelo+hotel: {req.budget_max}EUR
+- Aeropuerto origen: {req.origin}
+- Fechas: {req.departure_date} a {req.return_date}
+- Idiomas: {', '.join(req.languages) if req.languages else 'no especificado'}
+- Experiencia: {req.travel_experience}
+- Viaja: {req.travel_companion}
+- Clima preferido: {req.climate_pref}
+- Prioridad: {req.top_priority}
+
+Responde con este JSON exacto (sin markdown, sin backticks):
+{{"destinations": [{{"city": "nombre", "country": "pais", "iata": "XXX", "why": "razon personalizada en espanol", "estimated_flight_budget": 120, "vibe_tags": ["tag1", "tag2", "tag3"], "best_season": "estacion", "student_tip": "consejo en espanol"}}]}}"""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"wander-ai-dest-{uuid.uuid4()}",
+            system_message=system_prompt,
+        ).with_model("anthropic", "claude-4-sonnet-20250514")
+        
+        response = await chat.send_message(UserMessage(text=user_prompt))
+        
+        response_text = response.strip()
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            response_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            if response_text.startswith("json"):
+                response_text = response_text[4:].strip()
+        
+        result = json_module.loads(response_text)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Claude AI error: {e}")
+        return {"error": str(e), "destinations": []}
+
+
+@api_router.post("/ai/itinerary")
+async def ai_itinerary(req: AIItineraryRequest):
+    """Generate day-by-day itinerary using Claude"""
+    if not EMERGENT_LLM_KEY:
+        return {"error": "LLM key not configured", "itinerary": []}
+    
+    try:
+        system_prompt = """Eres un experto en viajes que genera itinerarios detallados dia a dia. 
+Responde SOLO con JSON valido, sin bloques de codigo, sin backticks.
+Incluye actividades reales, restaurantes que existen, barrios reales.
+Cada dia debe tener al menos 1 opcion gratuita. Incluye horarios aproximados y consejos locales."""
+
+        user_prompt = f"""Genera un itinerario de {req.trip_days} dias en {req.city}, {req.country}.
+Mood: {req.mood}. Budget: {req.budget_level}.
+
+Responde con este JSON exacto (sin markdown):
+{{"city": "{req.city}", "total_days": {req.trip_days}, "days": [{{"day": 1, "title": "titulo del dia", "activities": [{{"time": "09:00", "title": "nombre actividad", "description": "descripcion corta", "type": "culture", "cost": "Gratis", "location": "barrio", "insider_tip": "consejo"}}]}}], "local_tips": ["consejo1", "consejo2"]}}"""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"wander-ai-itin-{uuid.uuid4()}",
+            system_message=system_prompt,
+        ).with_model("anthropic", "claude-4-sonnet-20250514")
+        
+        response = await chat.send_message(UserMessage(text=user_prompt))
+        
+        response_text = response.strip()
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            response_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            if response_text.startswith("json"):
+                response_text = response_text[4:].strip()
+        
+        result = json_module.loads(response_text)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Claude itinerary error: {e}")
+        return {"error": str(e), "itinerary": []}
+
+
+# ==================== SUBSIDIES ENDPOINT ====================
+
+EUROPEAN_SUBSIDIES = [
+    {
+        "name": "DiscoverEU",
+        "description": "Pase Interrail gratuito para jovenes de 18 anos",
+        "amount": "Gratuito (valor ~251€)",
+        "max_age": 18,
+        "min_age": 18,
+        "requires_student": False,
+        "eligible_countries": ["EU"],
+        "apply_url": "https://youth.europa.eu/discovereu_en",
+        "next_deadline": "Octubre 2026",
+    },
+    {
+        "name": "Erasmus+ Travel Grant",
+        "description": "Subvencion de viaje para estudiantes Erasmus",
+        "amount": "Hasta 275€",
+        "max_age": 30,
+        "min_age": 18,
+        "requires_student": True,
+        "requires_erasmus": True,
+        "eligible_countries": ["EU"],
+        "apply_url": "https://erasmus-plus.ec.europa.eu/",
+        "next_deadline": "Segun universidad",
+    },
+    {
+        "name": "ANCV Cheques-Vacances",
+        "description": "Cheques vacaciones cofinanciados por el empleador (Francia)",
+        "amount": "Variable (hasta 500€/ano)",
+        "max_age": 99,
+        "min_age": 18,
+        "requires_student": False,
+        "requires_employer": True,
+        "eligible_countries": ["FR"],
+        "apply_url": "https://www.ancv.com/",
+        "next_deadline": "Permanente",
+    },
+    {
+        "name": "Bono Joven Interrail (Espana)",
+        "description": "Descuento del 50% en Interrail para menores de 30",
+        "amount": "Hasta 150€ descuento",
+        "max_age": 30,
+        "min_age": 18,
+        "requires_student": False,
+        "eligible_countries": ["ES"],
+        "apply_url": "https://www.interrail.eu/",
+        "next_deadline": "Permanente",
+    },
+    {
+        "name": "European Youth Card (EYCA)",
+        "description": "Descuentos en transporte, cultura y alojamiento en 38 paises",
+        "amount": "Descuentos variables",
+        "max_age": 30,
+        "min_age": 14,
+        "requires_student": False,
+        "eligible_countries": ["EU"],
+        "apply_url": "https://www.eyca.org/",
+        "next_deadline": "Permanente",
+    },
+    {
+        "name": "Deutsche Bahn BahnCard 25 (Alemania)",
+        "description": "25% descuento en trenes alemanes para jovenes",
+        "amount": "Tarjeta 36.90€ (ahorro medio 120€)",
+        "max_age": 27,
+        "min_age": 18,
+        "requires_student": False,
+        "eligible_countries": ["DE", "EU"],
+        "apply_url": "https://www.bahn.de/bahncard",
+        "next_deadline": "Permanente",
+    },
+]
+
+class SubsidyRequest(BaseModel):
+    age: int = 22
+    is_student: bool = True
+    country: str = "FR"
+    has_erasmus: bool = False
+
+@api_router.get("/subsidies/calculate")
+async def calculate_subsidies(age: int = 22, is_student: bool = True, country: str = "FR", has_erasmus: bool = False):
+    """Calculate available travel subsidies for the user"""
+    applicable = []
+    total_savings = 0
+    
+    for subsidy in EUROPEAN_SUBSIDIES:
+        applies = True
+        
+        if age < subsidy.get("min_age", 0) or age > subsidy.get("max_age", 99):
+            applies = False
+        if subsidy.get("requires_student") and not is_student:
+            applies = False
+        if subsidy.get("requires_erasmus") and not has_erasmus:
+            applies = False
+        
+        eligible = subsidy.get("eligible_countries", [])
+        if "EU" not in eligible and country not in eligible:
+            applies = False
+        
+        result = {
+            "name": subsidy["name"],
+            "description": subsidy["description"],
+            "amount": subsidy["amount"],
+            "applies": applies,
+            "apply_url": subsidy["apply_url"],
+            "next_deadline": subsidy["next_deadline"],
+        }
+        applicable.append(result)
+        
+        if applies:
+            amount_str = subsidy["amount"]
+            numbers = re.findall(r'(\d+)', amount_str)
+            if numbers:
+                total_savings += int(numbers[-1])
+    
+    return {
+        "subsidies": applicable,
+        "total_potential_savings": total_savings,
+        "applicable_count": sum(1 for s in applicable if s["applies"]),
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 

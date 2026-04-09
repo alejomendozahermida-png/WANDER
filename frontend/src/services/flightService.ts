@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { Destination } from '../types';
 
-const DUFFEL_API_KEY = 'duffel_test_D7jI8p4-3bH8VaeB8nSbt4ExyMdG3l0Bl87HLEr_Bny';
+import Constants from 'expo-constants';
+
+const DUFFEL_API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_DUFFEL_API_KEY 
+  || process.env.EXPO_PUBLIC_DUFFEL_API_KEY 
+  || '';
 const DUFFEL_BASE_URL = 'https://api.duffel.com';
 const IS_TEST_KEY = DUFFEL_API_KEY.startsWith('duffel_test_');
 
