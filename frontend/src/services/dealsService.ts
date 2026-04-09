@@ -37,11 +37,11 @@ export interface Deal {
   tags: string[];
 }
 
-export const fetchDeals = async (limit: number = 50, errorFaresOnly: boolean = false): Promise<Deal[]> => {
+export const fetchDeals = async (limit: number = 50, errorFaresOnly: boolean = false, airport?: string): Promise<Deal[]> => {
   try {
-    const response = await apiClient.get('/api/deals', {
-      params: { limit, error_fares_only: errorFaresOnly },
-    });
+    const params: any = { limit, error_fares_only: errorFaresOnly };
+    if (airport) params.airport = airport;
+    const response = await apiClient.get('/api/deals', { params });
     return response.data.deals || [];
   } catch (error) {
     console.warn('[Deals] Error fetching deals:', error);

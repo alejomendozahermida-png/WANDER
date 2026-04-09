@@ -15,12 +15,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing } from '../../src/constants/theme';
 import { fetchDeals, refreshDeals, Deal } from '../../src/services/dealsService';
+import { useUserStore } from '../../src/store/userStore';
 
 export default function DealsScreen() {
+  const { user } = useUserStore();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'error_fares' | 'budget'>('all');
+  
+  const userAirport = user?.homeAirportIata || '';
 
   useEffect(() => {
     loadDeals();
@@ -29,9 +33,8 @@ export default function DealsScreen() {
   const loadDeals = async () => {
     setLoading(true);
     try {
-      // First refresh from RSS feeds
       await refreshDeals();
-      const data = await fetchDeals(50);
+      const data = await fetchDeals(50, false, userAirport);
       setDeals(data);
     } catch (error) {
       console.error('Error loading deals:', error);
@@ -44,7 +47,7 @@ export default function DealsScreen() {
     setRefreshing(true);
     try {
       await refreshDeals();
-      const data = await fetchDeals(50);
+      const data = await fetchDeals(50, false, userAirport);
       setDeals(data);
     } catch (error) {
       console.error('Error refreshing:', error);

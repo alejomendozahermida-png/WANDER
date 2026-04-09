@@ -81,23 +81,98 @@ RSS_FEEDS = [
         "name": "secretflying",
         "url": "https://www.secretflying.com/feed/",
         "is_error_fare": True,
+        "region": "global",
     },
     {
-        "name": "fly4free",
+        "name": "fly4free_us",
         "url": "https://www.fly4free.com/feed/",
         "is_error_fare": False,
+        "region": "us",
+    },
+    {
+        "name": "fly4free_europe",
+        "url": "https://www.fly4free.com/flight-deals/europe/feed/",
+        "is_error_fare": False,
+        "region": "europe",
     },
     {
         "name": "theflightdeal",
         "url": "https://www.theflightdeal.com/feed/",
         "is_error_fare": True,
+        "region": "us",
     },
     {
         "name": "holidaypirates",
         "url": "https://www.holidaypirates.com/feed",
         "is_error_fare": False,
+        "region": "europe",
+    },
+    {
+        "name": "travelfree",
+        "url": "https://travelfree.info/feed",
+        "is_error_fare": False,
+        "region": "europe",
     },
 ]
+
+# Airport to region mapping
+AIRPORT_REGIONS = {
+    # Europe
+    "CDG": "europe", "ORY": "europe", "LHR": "europe", "LGW": "europe", "STN": "europe",
+    "AMS": "europe", "FRA": "europe", "MUC": "europe", "BER": "europe", "BCN": "europe",
+    "MAD": "europe", "FCO": "europe", "MXP": "europe", "LIS": "europe", "ATH": "europe",
+    "VIE": "europe", "ZRH": "europe", "BRU": "europe", "CPH": "europe", "OSL": "europe",
+    "ARN": "europe", "HEL": "europe", "WAW": "europe", "PRG": "europe", "BUD": "europe",
+    "DUB": "europe", "EDI": "europe", "MAN": "europe",
+    # US
+    "JFK": "us", "LAX": "us", "ORD": "us", "SFO": "us", "MIA": "us",
+    "ATL": "us", "DFW": "us", "DEN": "us", "SEA": "us", "BOS": "us",
+    "IAD": "us", "EWR": "us", "PHL": "us", "IAH": "us", "MSP": "us",
+    # LATAM
+    "BOG": "latam", "MEX": "latam", "GRU": "latam", "EZE": "latam", "SCL": "latam",
+    "LIM": "latam", "CUN": "latam", "PTY": "latam", "MDE": "latam",
+    # Asia
+    "NRT": "asia", "HND": "asia", "ICN": "asia", "SIN": "asia", "HKG": "asia",
+    "BKK": "asia", "DEL": "asia", "BOM": "asia", "KUL": "asia", "TPE": "asia",
+    # Middle East / Africa
+    "DXB": "meast", "DOH": "meast", "IST": "europe", "CAI": "meast",
+    "JNB": "africa", "CPT": "africa", "NBO": "africa", "CMN": "africa",
+    # Oceania
+    "SYD": "oceania", "MEL": "oceania", "AKL": "oceania",
+}
+
+# European city names for matching deal origins
+EUROPEAN_CITIES = {
+    "paris", "london", "amsterdam", "berlin", "barcelona", "madrid", "rome", "milan",
+    "lisbon", "athens", "vienna", "zurich", "brussels", "copenhagen", "oslo", "stockholm",
+    "helsinki", "warsaw", "prague", "budapest", "dublin", "edinburgh", "manchester",
+    "munich", "frankfurt", "lyon", "marseille", "nice", "seville", "porto", "florence",
+    "venice", "naples", "dubrovnik", "split", "bucharest", "sofia", "belgrade", "zagreb",
+}
+
+US_CITIES = {
+    "new york", "los angeles", "chicago", "san francisco", "miami", "atlanta",
+    "dallas", "denver", "seattle", "boston", "washington", "philadelphia", "houston",
+    "minneapolis", "detroit", "portland", "san diego", "las vegas", "orlando",
+}
+
+LATAM_CITIES = {
+    "bogota", "mexico city", "sao paulo", "buenos aires", "santiago", "lima",
+    "cancun", "panama city", "medellin", "cartagena", "rio de janeiro",
+}
+
+def get_deal_region(deal: dict) -> str:
+    """Determine the region of a deal based on origin city"""
+    origin = (deal.get("origin") or "").lower()
+    if not origin:
+        return deal.get("feed_region", "global")
+    if origin in EUROPEAN_CITIES:
+        return "europe"
+    if origin in US_CITIES:
+        return "us"
+    if origin in LATAM_CITIES:
+        return "latam"
+    return deal.get("feed_region", "global")
 
 
 def parse_price_from_text(text: str) -> Optional[float]:
@@ -217,6 +292,7 @@ async def fetch_rss_feed(feed_config: dict) -> List[dict]:
                         "fetched_at": datetime.utcnow(),
                         "is_error_fare": feed_config.get("is_error_fare", False) or 'error_fare' in tags,
                         "tags": tags,
+                        "feed_region": feed_config.get("region", "global"),
                     }
                     deals.append(deal)
                 except Exception as item_err:
@@ -331,13 +407,13 @@ async def get_status_checks():
 # ---- Deal Aggregator Routes ----
 
 @api_router.get("/deals")
-async def get_deals(limit: int = 50, error_fares_only: bool = False):
-    """Get cached flight deals from RSS feeds"""
+async def get_deals(limit: int = 50, error_fares_only: bool = False, airport: str = None):
+    """Get cached flight deals from RSS feeds, filtered by user region"""
     query = {}
     if error_fares_only:
         query["is_error_fare"] = True
     
-    deals = await db.deals.find(query).sort("fetched_at", -1).to_list(limit)
+    deals = await db.deals.find(query).sort("fetched_at", -1).to_list(200)
     
     # Convert ObjectId and datetime for JSON serialization
     for deal in deals:
@@ -347,7 +423,32 @@ async def get_deals(limit: int = 50, error_fares_only: bool = False):
         if deal.get("fetched_at"):
             deal["fetched_at"] = deal["fetched_at"].isoformat()
     
-    return {"deals": deals, "count": len(deals)}
+    # If airport provided, filter and prioritize by region
+    if airport:
+        user_region = AIRPORT_REGIONS.get(airport.upper(), "global")
+        
+        # Categorize deals
+        for_you = []  # Same region as user
+        global_deals = []  # Global deals
+        other = []  # Other regions
+        
+        for deal in deals:
+            deal_region = get_deal_region(deal)
+            if deal_region == user_region:
+                deal["relevance"] = "for_you"
+                for_you.append(deal)
+            elif deal_region == "global":
+                deal["relevance"] = "global"
+                global_deals.append(deal)
+            else:
+                deal["relevance"] = "other"
+                other.append(deal)
+        
+        # Prioritize: user region first, then global, then limited others
+        filtered = for_you + global_deals + other[:5]
+        return {"deals": filtered[:limit], "count": len(filtered[:limit]), "user_region": user_region}
+    
+    return {"deals": deals[:limit], "count": len(deals[:limit])}
 
 
 @api_router.post("/deals/refresh")
