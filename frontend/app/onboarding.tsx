@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   Modal,
   FlatList,
   Dimensions,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +24,15 @@ import { Ionicons } from '@expo/vector-icons';
 const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 6;
 
-// ==================== DATA ====================
+const STEP_META = [
+  { icon: 'person-outline', title: '¿Quien eres?', subtitle: 'Cuentanos sobre ti para personalizar tu experiencia' },
+  { icon: 'airplane-outline', title: '¿Desde donde viajas?', subtitle: 'Buscaremos vuelos desde tu aeropuerto' },
+  { icon: 'globe-outline', title: 'Tu perfil viajero', subtitle: 'Idiomas y experiencia' },
+  { icon: 'heart-outline', title: 'Tus preferencias', subtitle: 'Companero, clima y prioridades' },
+  { icon: 'wallet-outline', title: 'Tu presupuesto', subtitle: 'Vuelo + alojamiento por viaje' },
+  { icon: 'sparkles-outline', title: '¿Que te gusta?', subtitle: 'Selecciona tus vibes favoritas' },
+];
+
 const LANGUAGES = [
   { code: 'es', label: 'Espanol', flag: '🇪🇸' },
   { code: 'en', label: 'Ingles', flag: '🇬🇧' },
@@ -44,26 +55,26 @@ const EXPERIENCE_OPTIONS = [
 ];
 
 const COMPANION_OPTIONS = [
-  { id: 'solo', icon: '🎒', label: 'Solo/a', desc: 'Aventura en solitario' },
-  { id: 'couple', icon: '💑', label: 'En pareja', desc: 'Viaje romantico' },
-  { id: 'friends', icon: '👥', label: 'Con amigos', desc: 'Grupo de amigos' },
-  { id: 'family', icon: '👨‍👩‍👧‍👦', label: 'En familia', desc: 'Viaje familiar' },
+  { id: 'solo', icon: '🎒', label: 'Solo/a' },
+  { id: 'couple', icon: '💑', label: 'En pareja' },
+  { id: 'friends', icon: '👥', label: 'Amigos' },
+  { id: 'family', icon: '👨‍👩‍👧‍👦', label: 'Familia' },
 ];
 
 const CLIMATE_OPTIONS = [
-  { id: 'hot', icon: '☀️', label: 'Calor', desc: '30°C+, playa y sol' },
-  { id: 'warm', icon: '🌤️', label: 'Templado', desc: '20-30°C, agradable' },
-  { id: 'mild', icon: '🍂', label: 'Fresco', desc: '10-20°C, otonal' },
-  { id: 'cold', icon: '❄️', label: 'Frio', desc: '<10°C, nieve y montanas' },
-  { id: 'any', icon: '🌈', label: 'Me da igual', desc: 'Cualquier clima' },
+  { id: 'hot', icon: '☀️', label: 'Calor' },
+  { id: 'warm', icon: '🌤️', label: 'Templado' },
+  { id: 'mild', icon: '🍂', label: 'Fresco' },
+  { id: 'cold', icon: '❄️', label: 'Frio' },
+  { id: 'any', icon: '🌈', label: 'Igual' },
 ];
 
 const PRIORITY_OPTIONS = [
-  { id: 'price', icon: '💰', label: 'Precio', desc: 'Lo mas barato posible' },
-  { id: 'experience', icon: '✨', label: 'Experiencia', desc: 'Que sea inolvidable' },
-  { id: 'climate', icon: '🌡️', label: 'Clima', desc: 'Buen tiempo garantizado' },
-  { id: 'safety', icon: '🛡️', label: 'Seguridad', desc: 'Destinos seguros' },
-  { id: 'food', icon: '🍽️', label: 'Gastronomia', desc: 'Descubrir sabores' },
+  { id: 'price', icon: '💰', label: 'Precio' },
+  { id: 'experience', icon: '✨', label: 'Experiencia' },
+  { id: 'climate', icon: '🌡️', label: 'Clima' },
+  { id: 'safety', icon: '🛡️', label: 'Seguridad' },
+  { id: 'food', icon: '🍽️', label: 'Comida' },
 ];
 
 const BUDGET_PRESETS = [
@@ -86,36 +97,27 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { user, updateProfile } = useUserStore();
   const [step, setStep] = useState(1);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   
-  // Step 1: Identity
   const [firstName, setFirstName] = useState('');
   const [nationality, setNationality] = useState('');
   const [passportCountry, setPassportCountry] = useState('');
   const [showNationalityModal, setShowNationalityModal] = useState(false);
   const [showPassportModal, setShowPassportModal] = useState(false);
-  
-  // Step 2: Airport
   const [homeAirport, setHomeAirport] = useState<any>(null);
   const [showAirportModal, setShowAirportModal] = useState(false);
-  
-  // Step 3: Languages + Experience
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [travelExperience, setTravelExperience] = useState<string>('');
-  
-  // Step 4: Companion + Climate + Priority
   const [travelCompanion, setTravelCompanion] = useState<string>('');
   const [climatePref, setClimatePref] = useState<string>('');
   const [topPriority, setTopPriority] = useState<string>('');
-  
-  // Step 5: Budget
   const [budgetMin, setBudgetMin] = useState(200);
   const [budgetMax, setBudgetMax] = useState(500);
   const [selectedBudgetPreset, setSelectedBudgetPreset] = useState(1);
-  
-  // Step 6: Vibes
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
 
   const progress = (step / TOTAL_STEPS) * 100;
+  const meta = STEP_META[step - 1];
 
   const canProceed = () => {
     switch (step) {
@@ -129,25 +131,33 @@ export default function OnboardingScreen() {
     }
   };
 
+  const animateStep = (newStep: number) => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+      setStep(newStep);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    });
+  };
+
   const handleNext = () => {
     if (!canProceed()) return;
     if (step < TOTAL_STEPS) {
-      setStep(step + 1);
+      animateStep(step + 1);
     } else {
       handleComplete();
     }
   };
 
+  const handleBack = () => {
+    if (step > 1) animateStep(step - 1);
+  };
+
   const handleComplete = async () => {
     try {
       await updateProfile({
-        firstName,
-        nationality,
-        passportCountry,
+        firstName, nationality, passportCountry,
         homeCity: homeAirport?.city || '',
         homeAirportIata: homeAirport?.iata || '',
-        budgetMin,
-        budgetMax,
+        budgetMin, budgetMax,
         travelStyle: selectedVibes,
         travelsAlone: travelCompanion === 'solo',
         onboardingComplete: true,
@@ -161,156 +171,154 @@ export default function OnboardingScreen() {
       router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error al guardar el perfil. Por favor intenta de nuevo.');
     }
   };
 
   const toggleLanguage = (code: string) => {
-    if (selectedLanguages.includes(code)) {
-      setSelectedLanguages(selectedLanguages.filter(l => l !== code));
-    } else {
-      setSelectedLanguages([...selectedLanguages, code]);
-    }
+    setSelectedLanguages(prev => prev.includes(code) ? prev.filter(l => l !== code) : [...prev, code]);
   };
 
   const toggleVibe = (id: string) => {
-    if (selectedVibes.includes(id)) {
-      setSelectedVibes(selectedVibes.filter(v => v !== id));
-    } else {
-      setSelectedVibes([...selectedVibes, id]);
-    }
+    setSelectedVibes(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
   };
 
   // ==================== STEP RENDERS ====================
   const renderStep1 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>¿Quien eres?</Text>
-      <Text style={styles.stepSubtitle}>Cuentanos sobre ti</Text>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Nombre</Text>
+    <View>
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Nombre</Text>
         <TextInput
           style={styles.input}
           placeholder="Tu nombre"
-          placeholderTextColor={Colors.onSurfaceDim}
+          placeholderTextColor={Colors.onSurfaceDim + '80'}
           value={firstName}
           onChangeText={setFirstName}
+          autoFocus
         />
       </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Nacionalidad</Text>
-        <TouchableOpacity style={styles.input} onPress={() => setShowNationalityModal(true)}>
-          <Text style={nationality ? styles.inputText : styles.placeholderText}>
-            {nationality ? NATIONALITIES.find(n => n.code === nationality)?.name : 'Selecciona'}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Nacionalidad</Text>
+        <TouchableOpacity style={styles.selectInput} onPress={() => setShowNationalityModal(true)}>
+          <Text style={nationality ? styles.selectText : styles.selectPlaceholder}>
+            {nationality ? NATIONALITIES.find(n => n.code === nationality)?.name : 'Selecciona tu pais'}
           </Text>
+          <Ionicons name="chevron-down" size={20} color={Colors.onSurfaceDim} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Pais del pasaporte</Text>
-        <TouchableOpacity style={styles.input} onPress={() => setShowPassportModal(true)}>
-          <Text style={passportCountry ? styles.inputText : styles.placeholderText}>
-            {passportCountry ? NATIONALITIES.find(n => n.code === passportCountry)?.name : 'Selecciona'}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Pasaporte</Text>
+        <TouchableOpacity style={styles.selectInput} onPress={() => setShowPassportModal(true)}>
+          <Text style={passportCountry ? styles.selectText : styles.selectPlaceholder}>
+            {passportCountry ? NATIONALITIES.find(n => n.code === passportCountry)?.name : 'Pais del pasaporte'}
           </Text>
+          <Ionicons name="chevron-down" size={20} color={Colors.onSurfaceDim} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
   const renderStep2 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>¿Desde donde viajas?</Text>
-      <Text style={styles.stepSubtitle}>Tu aeropuerto base</Text>
-
-      <TouchableOpacity style={styles.input} onPress={() => setShowAirportModal(true)}>
-        <Text style={homeAirport ? styles.inputText : styles.placeholderText}>
-          {homeAirport ? `${homeAirport.city} (${homeAirport.iata})` : 'Selecciona tu aeropuerto'}
-        </Text>
+    <View>
+      <TouchableOpacity style={styles.airportCard} onPress={() => setShowAirportModal(true)}>
+        <View style={styles.airportIcon}>
+          <Ionicons name="airplane" size={28} color={Colors.coral} />
+        </View>
+        {homeAirport ? (
+          <View>
+            <Text style={styles.airportCity}>{homeAirport.city}</Text>
+            <Text style={styles.airportCode}>{homeAirport.iata} - {homeAirport.name}</Text>
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.airportPlaceholder}>Selecciona tu aeropuerto</Text>
+            <Text style={styles.airportHint}>Buscaremos vuelos desde aqui</Text>
+          </View>
+        )}
+        <Ionicons name="chevron-forward" size={20} color={Colors.onSurfaceDim} style={{ marginLeft: 'auto' }} />
       </TouchableOpacity>
     </View>
   );
 
   const renderStep3 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Tu perfil viajero</Text>
-      <Text style={styles.stepSubtitle}>Idiomas que hablas</Text>
-
-      <View style={styles.optionGrid}>
+    <View>
+      <Text style={styles.sectionLabel}>Idiomas que hablas</Text>
+      <View style={styles.chipGrid}>
         {LANGUAGES.map(lang => (
           <TouchableOpacity
             key={lang.code}
-            style={[styles.langChip, selectedLanguages.includes(lang.code) && styles.langChipActive]}
+            style={[styles.chip, selectedLanguages.includes(lang.code) && styles.chipActive]}
             onPress={() => toggleLanguage(lang.code)}
           >
-            <Text style={styles.langFlag}>{lang.flag}</Text>
-            <Text style={[styles.langLabel, selectedLanguages.includes(lang.code) && styles.langLabelActive]}>
+            <Text style={styles.chipFlag}>{lang.flag}</Text>
+            <Text style={[styles.chipText, selectedLanguages.includes(lang.code) && styles.chipTextActive]}>
               {lang.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={[styles.stepSubtitle, { marginTop: Spacing.lg }]}>Experiencia viajera</Text>
+      <Text style={[styles.sectionLabel, { marginTop: Spacing.xl }]}>Experiencia viajera</Text>
       {EXPERIENCE_OPTIONS.map(opt => (
         <TouchableOpacity
           key={opt.id}
-          style={[styles.optionCard, travelExperience === opt.id && styles.optionCardActive]}
+          style={[styles.listCard, travelExperience === opt.id && styles.listCardActive]}
           onPress={() => setTravelExperience(opt.id)}
         >
-          <Text style={styles.optionIcon}>{opt.icon}</Text>
-          <View style={styles.optionTextContainer}>
-            <Text style={[styles.optionLabel, travelExperience === opt.id && styles.optionLabelActive]}>{opt.label}</Text>
-            <Text style={styles.optionDesc}>{opt.desc}</Text>
+          <Text style={styles.listCardIcon}>{opt.icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.listCardTitle, travelExperience === opt.id && { color: Colors.coral }]}>{opt.label}</Text>
+            <Text style={styles.listCardDesc}>{opt.desc}</Text>
           </View>
-          {travelExperience === opt.id && <Ionicons name="checkmark-circle" size={24} color={Colors.coral} />}
+          {travelExperience === opt.id && (
+            <Ionicons name="checkmark-circle" size={22} color={Colors.coral} />
+          )}
         </TouchableOpacity>
       ))}
     </View>
   );
 
   const renderStep4 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Tus preferencias</Text>
-      
-      <Text style={styles.stepSubtitle}>¿Con quien viajas?</Text>
-      <View style={styles.optionRow}>
+    <View>
+      <Text style={styles.sectionLabel}>¿Con quien viajas?</Text>
+      <View style={styles.gridRow}>
         {COMPANION_OPTIONS.map(opt => (
           <TouchableOpacity
             key={opt.id}
-            style={[styles.squareOption, travelCompanion === opt.id && styles.squareOptionActive]}
+            style={[styles.gridCard, travelCompanion === opt.id && styles.gridCardActive]}
             onPress={() => setTravelCompanion(opt.id)}
           >
-            <Text style={styles.squareIcon}>{opt.icon}</Text>
-            <Text style={[styles.squareLabel, travelCompanion === opt.id && styles.squareLabelActive]}>{opt.label}</Text>
+            <Text style={styles.gridIcon}>{opt.icon}</Text>
+            <Text style={[styles.gridLabel, travelCompanion === opt.id && styles.gridLabelActive]}>{opt.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={[styles.stepSubtitle, { marginTop: Spacing.lg }]}>Clima ideal</Text>
-      <View style={styles.optionRow}>
+      <Text style={[styles.sectionLabel, { marginTop: Spacing.xl }]}>Clima ideal</Text>
+      <View style={styles.gridRow}>
         {CLIMATE_OPTIONS.map(opt => (
           <TouchableOpacity
             key={opt.id}
-            style={[styles.squareOption, climatePref === opt.id && styles.squareOptionActive]}
+            style={[styles.gridCard, { minWidth: 64 }, climatePref === opt.id && styles.gridCardActive]}
             onPress={() => setClimatePref(opt.id)}
           >
-            <Text style={styles.squareIcon}>{opt.icon}</Text>
-            <Text style={[styles.squareLabel, climatePref === opt.id && styles.squareLabelActive]}>{opt.label}</Text>
+            <Text style={styles.gridIcon}>{opt.icon}</Text>
+            <Text style={[styles.gridLabel, climatePref === opt.id && styles.gridLabelActive]}>{opt.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={[styles.stepSubtitle, { marginTop: Spacing.lg }]}>Prioridad #1</Text>
-      <View style={styles.optionRow}>
+      <Text style={[styles.sectionLabel, { marginTop: Spacing.xl }]}>Tu prioridad #1</Text>
+      <View style={styles.gridRow}>
         {PRIORITY_OPTIONS.map(opt => (
           <TouchableOpacity
             key={opt.id}
-            style={[styles.squareOption, topPriority === opt.id && styles.squareOptionActive]}
+            style={[styles.gridCard, { minWidth: 64 }, topPriority === opt.id && styles.gridCardActive]}
             onPress={() => setTopPriority(opt.id)}
           >
-            <Text style={styles.squareIcon}>{opt.icon}</Text>
-            <Text style={[styles.squareLabel, topPriority === opt.id && styles.squareLabelActive]}>{opt.label}</Text>
+            <Text style={styles.gridIcon}>{opt.icon}</Text>
+            <Text style={[styles.gridLabel, topPriority === opt.id && styles.gridLabelActive]}>{opt.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -318,33 +326,22 @@ export default function OnboardingScreen() {
   );
 
   const renderStep5 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Tu presupuesto</Text>
-      <Text style={styles.stepSubtitle}>Por viaje completo (vuelo + alojamiento)</Text>
-
-      <View style={styles.budgetDisplay}>
-        <Text style={styles.budgetAmount}>{budgetMin}€ - {budgetMax}€</Text>
-        <Text style={styles.budgetHint}>El algoritmo buscara dentro y un poco por encima</Text>
+    <View>
+      <View style={styles.budgetHero}>
+        <Text style={styles.budgetValue}>{budgetMin}€ - {budgetMax}€</Text>
+        <Text style={styles.budgetHint}>Buscaremos dentro y un poco por encima</Text>
       </View>
 
-      <View style={styles.budgetPresetsGrid}>
+      <View style={styles.budgetGrid}>
         {BUDGET_PRESETS.map((preset, idx) => (
           <TouchableOpacity
             key={idx}
-            style={[styles.budgetPreset, selectedBudgetPreset === idx && styles.budgetPresetActive]}
-            onPress={() => {
-              setSelectedBudgetPreset(idx);
-              setBudgetMin(preset.min);
-              setBudgetMax(preset.max);
-            }}
+            style={[styles.budgetCard, selectedBudgetPreset === idx && styles.budgetCardActive]}
+            onPress={() => { setSelectedBudgetPreset(idx); setBudgetMin(preset.min); setBudgetMax(preset.max); }}
           >
-            <Text style={styles.budgetPresetIcon}>{preset.icon}</Text>
-            <Text style={[styles.budgetPresetLabel, selectedBudgetPreset === idx && styles.budgetPresetLabelActive]}>
-              {preset.label}
-            </Text>
-            <Text style={[styles.budgetPresetRange, selectedBudgetPreset === idx && styles.budgetPresetRangeActive]}>
-              {preset.desc}
-            </Text>
+            <Text style={styles.budgetCardIcon}>{preset.icon}</Text>
+            <Text style={[styles.budgetCardLabel, selectedBudgetPreset === idx && { color: Colors.coral }]}>{preset.label}</Text>
+            <Text style={[styles.budgetCardRange, selectedBudgetPreset === idx && { color: Colors.coral, opacity: 1 }]}>{preset.desc}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -352,10 +349,7 @@ export default function OnboardingScreen() {
   );
 
   const renderStep6 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>¿Que te gusta?</Text>
-      <Text style={styles.stepSubtitle}>Selecciona tus vibes (minimo 1)</Text>
-
+    <View>
       <View style={styles.vibeGrid}>
         {VIBE_OPTIONS.map(vibe => (
           <TouchableOpacity
@@ -364,26 +358,26 @@ export default function OnboardingScreen() {
             onPress={() => toggleVibe(vibe.id)}
           >
             <Text style={styles.vibeIcon}>{vibe.icon}</Text>
-            <Text style={[styles.vibeLabel, selectedVibes.includes(vibe.id) && styles.vibeLabelActive]}>
-              {vibe.label}
-            </Text>
+            <Text style={[styles.vibeLabel, selectedVibes.includes(vibe.id) && styles.vibeLabelActive]}>{vibe.label}</Text>
+            {selectedVibes.includes(vibe.id) && (
+              <View style={styles.vibeCheck}>
+                <Ionicons name="checkmark" size={12} color={Colors.white} />
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Summary preview */}
       {selectedVibes.length > 0 && (
-        <View style={styles.summaryPreview}>
-          <Text style={styles.summaryTitle}>Tu perfil viajero</Text>
-          <Text style={styles.summaryText}>
-            {travelExperience === 'expert' ? 'Viajero experto' : travelExperience === 'intermediate' ? 'Viajero intermedio' : 'Nuevo viajero'}
-            {' · '}
-            {travelCompanion === 'solo' ? 'Solo/a' : travelCompanion === 'couple' ? 'En pareja' : travelCompanion === 'friends' ? 'Con amigos' : 'En familia'}
-            {' · '}
-            {climatePref === 'any' ? 'Cualquier clima' : climatePref === 'hot' ? 'Clima calido' : climatePref === 'warm' ? 'Templado' : climatePref === 'mild' ? 'Fresco' : 'Frio'}
-          </Text>
-          <Text style={styles.summaryText}>
-            Presupuesto: {budgetMin}-{budgetMax}€ · Prioridad: {PRIORITY_OPTIONS.find(p => p.id === topPriority)?.label}
+        <View style={styles.profilePreview}>
+          <View style={styles.previewHeader}>
+            <Ionicons name="sparkles" size={16} color={Colors.coral} />
+            <Text style={styles.previewTitle}>Tu perfil</Text>
+          </View>
+          <Text style={styles.previewText}>
+            {travelExperience === 'expert' ? 'Viajero experto' : travelExperience === 'intermediate' ? 'Con experiencia' : 'Nuevo viajero'}
+            {' · '}{travelCompanion === 'solo' ? 'Solo/a' : travelCompanion === 'couple' ? 'En pareja' : travelCompanion === 'friends' ? 'Con amigos' : 'En familia'}
+            {' · '}{budgetMin}-{budgetMax}€
           </Text>
         </View>
       )}
@@ -402,22 +396,14 @@ export default function OnboardingScreen() {
     }
   };
 
-  const renderListModal = (
-    visible: boolean,
-    onClose: () => void,
-    data: any[],
-    onSelect: (item: any) => void,
-    keyField: string,
-    labelField: string,
-    title: string,
-  ) => (
+  const renderListModal = (visible: boolean, onClose: () => void, data: any[], onSelect: (item: any) => void, keyField: string, labelField: string, title: string) => (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={Colors.onSurface} />
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={28} color={Colors.onSurfaceDim} />
             </TouchableOpacity>
           </View>
           <FlatList
@@ -436,31 +422,54 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{step}/{TOTAL_STEPS}</Text>
+      {/* Step Dots */}
+      <View style={styles.dotsRow}>
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <View key={i} style={[styles.dot, i < step ? styles.dotFilled : {}, i === step - 1 ? styles.dotCurrent : {}]} />
+        ))}
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {renderCurrentStep()}
-      </ScrollView>
+      {/* Step Header */}
+      <View style={styles.stepHeader}>
+        <View style={styles.stepIconCircle}>
+          <Ionicons name={meta.icon as any} size={24} color={Colors.coral} />
+        </View>
+        <Text style={styles.stepTitle}>{meta.title}</Text>
+        <Text style={styles.stepSubtitle}>{meta.subtitle}</Text>
+      </View>
 
-      {/* Navigation */}
-      <View style={styles.navContainer}>
-        {step > 1 && (
-          <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View style={{ opacity: fadeAnim }}>
+            {renderCurrentStep()}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Bottom Nav */}
+      <View style={styles.bottomNav}>
+        {step > 1 ? (
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
             <Ionicons name="arrow-back" size={22} color={Colors.onSurface} />
           </TouchableOpacity>
-        )}
-        <Button
-          title={step === TOTAL_STEPS ? 'Empezar a viajar' : 'Siguiente'}
+        ) : <View style={{ width: 48 }} />}
+
+        <TouchableOpacity
+          style={[styles.nextBtn, !canProceed() && styles.nextBtnDisabled]}
           onPress={handleNext}
           disabled={!canProceed()}
-          style={step === 1 ? { ...styles.nextBtn, flex: 1 } : styles.nextBtn}
-        />
+          activeOpacity={0.8}
+        >
+          <Text style={styles.nextBtnText}>
+            {step === TOTAL_STEPS ? 'Empezar' : 'Siguiente'}
+          </Text>
+          <Ionicons name={step === TOTAL_STEPS ? 'rocket-outline' : 'arrow-forward'} size={20} color={Colors.white} />
+        </TouchableOpacity>
       </View>
 
       {/* Modals */}
@@ -471,77 +480,108 @@ export default function OnboardingScreen() {
   );
 }
 
+const CARD_W = (width - Spacing.lg * 2 - Spacing.sm) / 2;
+const GRID_CARD_W = (width - Spacing.lg * 2 - Spacing.sm * 3) / 4;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  progressContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.sm },
-  progressBar: { flex: 1, height: 6, backgroundColor: Colors.surfaceMid, borderRadius: 3 },
-  progressFill: { height: '100%', backgroundColor: Colors.coral, borderRadius: 3 },
-  progressText: { ...Typography.label, color: Colors.onSurfaceDim, fontSize: 12 },
+  
+  // Dots
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.surfaceMid },
+  dotFilled: { backgroundColor: Colors.coral },
+  dotCurrent: { width: 24, borderRadius: 4, backgroundColor: Colors.coral },
+  
+  // Step Header
+  stepHeader: { alignItems: 'center', paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
+  stepIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,77,77,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
+  stepTitle: { fontSize: 26, fontWeight: '800', color: Colors.onSurface, textAlign: 'center', letterSpacing: -0.5 },
+  stepSubtitle: { fontSize: 14, color: Colors.onSurfaceDim, textAlign: 'center', marginTop: 4 },
+  
+  // Scroll
   scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.lg, paddingBottom: 120 },
-  stepContent: {},
-  stepTitle: { ...Typography.h1, color: Colors.onSurface, fontSize: 28, marginBottom: 4 },
-  stepSubtitle: { ...Typography.body, color: Colors.onSurfaceDim, marginBottom: Spacing.lg },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 100 },
+  
   // Inputs
-  inputContainer: { marginBottom: Spacing.md },
-  label: { ...Typography.label, color: Colors.onSurfaceDim, marginBottom: 6, fontSize: 12 },
-  input: { backgroundColor: Colors.surfaceHigh, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, justifyContent: 'center', minHeight: 50 },
-  inputText: { ...Typography.body, color: Colors.onSurface },
-  placeholderText: { ...Typography.body, color: Colors.onSurfaceDim },
-  // Language chips
-  optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  langChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceHigh, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, gap: 6, borderWidth: 2, borderColor: 'transparent' },
-  langChipActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,107,107,0.1)' },
-  langFlag: { fontSize: 18 },
-  langLabel: { fontSize: 13, color: Colors.onSurfaceDim, fontWeight: '500' },
-  langLabelActive: { color: Colors.coral, fontWeight: '700' },
-  // Option cards (experience)
-  optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceHigh, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 2, borderColor: 'transparent', gap: Spacing.md },
-  optionCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,107,107,0.08)' },
-  optionIcon: { fontSize: 28 },
-  optionTextContainer: { flex: 1 },
-  optionLabel: { ...Typography.bodySemibold, color: Colors.onSurface, fontSize: 15 },
-  optionLabelActive: { color: Colors.coral },
-  optionDesc: { fontSize: 12, color: Colors.onSurfaceDim, marginTop: 2 },
-  // Square options (companion, climate, priority)
-  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  squareOption: { width: (width - Spacing.lg * 2 - Spacing.sm * 3) / 4, minWidth: 72, alignItems: 'center', backgroundColor: Colors.surfaceHigh, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, paddingHorizontal: 4, borderWidth: 2, borderColor: 'transparent' },
-  squareOptionActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,107,107,0.1)' },
-  squareIcon: { fontSize: 24, marginBottom: 4 },
-  squareLabel: { fontSize: 11, color: Colors.onSurfaceDim, fontWeight: '600', textAlign: 'center' },
-  squareLabelActive: { color: Colors.coral },
+  inputGroup: { marginBottom: Spacing.lg },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.onSurfaceDim, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  input: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 14, fontSize: 16, color: Colors.onSurface, borderWidth: 1, borderColor: Colors.surfaceMid },
+  selectInput: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: Colors.surfaceMid },
+  selectText: { fontSize: 16, color: Colors.onSurface },
+  selectPlaceholder: { fontSize: 16, color: Colors.onSurfaceDim + '80' },
+  
+  // Airport card
+  airportCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, gap: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceMid },
+  airportIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,77,77,0.1)', alignItems: 'center', justifyContent: 'center' },
+  airportCity: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
+  airportCode: { fontSize: 13, color: Colors.onSurfaceDim, marginTop: 2 },
+  airportPlaceholder: { fontSize: 16, color: Colors.onSurface, fontWeight: '600' },
+  airportHint: { fontSize: 13, color: Colors.onSurfaceDim, marginTop: 2 },
+  
+  // Section labels
+  sectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.onSurfaceDim, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.md },
+  
+  // Chips (languages)
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, gap: 6, borderWidth: 1.5, borderColor: Colors.surfaceMid },
+  chipActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,77,77,0.08)' },
+  chipFlag: { fontSize: 18 },
+  chipText: { fontSize: 13, color: Colors.onSurfaceDim, fontWeight: '600' },
+  chipTextActive: { color: Colors.coral },
+  
+  // List cards (experience)
+  listCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, gap: Spacing.md, borderWidth: 1.5, borderColor: Colors.surfaceMid },
+  listCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,77,77,0.06)' },
+  listCardIcon: { fontSize: 28 },
+  listCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.onSurface },
+  listCardDesc: { fontSize: 12, color: Colors.onSurfaceDim, marginTop: 2 },
+  
+  // Grid cards (companion, climate, priority)
+  gridRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  gridCard: { width: GRID_CARD_W, alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, paddingHorizontal: 4, borderWidth: 1.5, borderColor: Colors.surfaceMid },
+  gridCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,77,77,0.08)' },
+  gridIcon: { fontSize: 24, marginBottom: 4 },
+  gridLabel: { fontSize: 11, color: Colors.onSurfaceDim, fontWeight: '700', textAlign: 'center' },
+  gridLabelActive: { color: Colors.coral },
+  
   // Budget
-  budgetDisplay: { alignItems: 'center', marginBottom: Spacing.xl },
-  budgetAmount: { fontSize: 36, fontWeight: '900', color: Colors.coral },
-  budgetHint: { fontSize: 12, color: Colors.onSurfaceDim, marginTop: 4 },
-  budgetPresetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  budgetPreset: { width: (width - Spacing.lg * 2 - Spacing.sm) / 2, alignItems: 'center', backgroundColor: Colors.surfaceHigh, borderRadius: BorderRadius.md, paddingVertical: Spacing.lg, borderWidth: 2, borderColor: 'transparent' },
-  budgetPresetActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,107,107,0.1)' },
-  budgetPresetIcon: { fontSize: 28, marginBottom: 6 },
-  budgetPresetLabel: { ...Typography.bodySemibold, color: Colors.onSurface, fontSize: 14 },
-  budgetPresetLabelActive: { color: Colors.coral },
-  budgetPresetRange: { fontSize: 13, color: Colors.onSurfaceDim, marginTop: 2 },
-  budgetPresetRangeActive: { color: Colors.coral },
+  budgetHero: { alignItems: 'center', marginBottom: Spacing.xl, paddingVertical: Spacing.md },
+  budgetValue: { fontSize: 38, fontWeight: '900', color: Colors.coral, letterSpacing: -1 },
+  budgetHint: { fontSize: 13, color: Colors.onSurfaceDim, marginTop: 6 },
+  budgetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  budgetCard: { width: CARD_W, alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, paddingVertical: Spacing.xl, borderWidth: 1.5, borderColor: Colors.surfaceMid },
+  budgetCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,77,77,0.08)' },
+  budgetCardIcon: { fontSize: 32, marginBottom: 8 },
+  budgetCardLabel: { fontSize: 15, fontWeight: '700', color: Colors.onSurface },
+  budgetCardRange: { fontSize: 13, color: Colors.onSurfaceDim, marginTop: 4, opacity: 0.8 },
+  
   // Vibes
   vibeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  vibeCard: { width: (width - Spacing.lg * 2 - Spacing.sm * 2) / 3, alignItems: 'center', backgroundColor: Colors.surfaceHigh, borderRadius: BorderRadius.lg, paddingVertical: Spacing.lg, borderWidth: 2, borderColor: 'transparent' },
-  vibeCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,107,107,0.1)' },
-  vibeIcon: { fontSize: 36, marginBottom: 6 },
-  vibeLabel: { fontSize: 13, fontWeight: '600', color: Colors.onSurfaceDim },
+  vibeCard: { width: (width - Spacing.lg * 2 - Spacing.sm * 2) / 3, alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, paddingVertical: Spacing.xl, borderWidth: 1.5, borderColor: Colors.surfaceMid },
+  vibeCardActive: { borderColor: Colors.coral, backgroundColor: 'rgba(255,77,77,0.08)' },
+  vibeIcon: { fontSize: 36, marginBottom: 8 },
+  vibeLabel: { fontSize: 13, fontWeight: '700', color: Colors.onSurfaceDim },
   vibeLabelActive: { color: Colors.coral },
-  // Summary preview
-  summaryPreview: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginTop: Spacing.xl, borderLeftWidth: 3, borderLeftColor: Colors.coral },
-  summaryTitle: { ...Typography.bodySemibold, color: Colors.coral, marginBottom: 4, fontSize: 13 },
-  summaryText: { fontSize: 13, color: Colors.onSurfaceDim, lineHeight: 20 },
-  // Navigation
-  navContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg, gap: Spacing.md },
-  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  nextBtn: { flex: 1 },
+  vibeCheck: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.coral, alignItems: 'center', justifyContent: 'center' },
+  
+  // Profile preview
+  profilePreview: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginTop: Spacing.xl, borderLeftWidth: 3, borderLeftColor: Colors.coral },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  previewTitle: { fontSize: 13, fontWeight: '700', color: Colors.coral },
+  previewText: { fontSize: 13, color: Colors.onSurfaceDim, lineHeight: 20 },
+  
+  // Bottom nav
+  bottomNav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.md },
+  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceMid, alignItems: 'center', justifyContent: 'center' },
+  nextBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.coral, borderRadius: BorderRadius.pill, paddingVertical: 16, gap: 8 },
+  nextBtnDisabled: { opacity: 0.4 },
+  nextBtnText: { fontSize: 16, fontWeight: '700', color: Colors.white },
+  
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingBottom: 30 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.surfaceMid },
-  modalTitle: { ...Typography.h3, color: Colors.onSurface },
-  modalItem: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.surfaceMid },
-  modalItemText: { ...Typography.body, color: Colors.onSurface },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
+  modalItem: { paddingVertical: 14, paddingHorizontal: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.surfaceMid },
+  modalItemText: { fontSize: 16, color: Colors.onSurface },
 });
