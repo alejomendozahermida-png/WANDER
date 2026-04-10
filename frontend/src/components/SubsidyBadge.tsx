@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 
 interface SubsidyBadgeProps {
   totalSavings: number;
@@ -18,13 +19,13 @@ export const SubsidyBadge: React.FC<SubsidyBadgeProps> = ({ totalSavings, applic
       activeOpacity={0.7}
     >
       <View style={styles.iconContainer}>
-        <Text style={styles.icon}>\uD83D\uDCB6</Text>
+        <Ionicons name="cash-outline" size={16} color={Colors.teal} />
       </View>
       <View style={styles.textContainer}>
-        <Text style={styles.mainText}>Hasta {totalSavings}\u20AC en ayudas disponibles</Text>
+        <Text style={styles.mainText}>Hasta {totalSavings}€ en ayudas disponibles</Text>
         <Text style={styles.subText}>{applicableCount} ayuda{applicableCount > 1 ? 's' : ''} europea{applicableCount > 1 ? 's' : ''}</Text>
       </View>
-      <Text style={styles.arrow}>\u203A</Text>
+      <Ionicons name="chevron-forward" size={18} color={Colors.teal} />
     </TouchableOpacity>
   );
 };
@@ -65,11 +66,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.onSurfaceDim,
     marginTop: 1,
-  },
-  arrow: {
-    fontSize: 22,
-    color: Colors.teal,
-    fontWeight: '300',
-    marginLeft: Spacing.sm,
   },
 });
