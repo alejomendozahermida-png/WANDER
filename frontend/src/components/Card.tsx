@@ -31,6 +31,6 @@ const styles = StyleSheet.create({
   },
   flat: {
     elevation: 0,
-    shadowOpacity: 0,
+    boxShadow: 'none',
   },
 });

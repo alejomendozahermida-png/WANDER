@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Platform,
   Image,
   Modal,
   ScrollView,
@@ -24,7 +23,8 @@ export default function DealsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'error_fares' | 'budget'>('all');
-  
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+
   const userAirport = user?.homeAirportIata || '';
 
   useEffect(() => {
@@ -93,86 +93,97 @@ export default function DealsScreen() {
     return `Hace ${days}d`;
   };
 
-  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
-
   const renderDeal = ({ item }: { item: Deal }) => (
     <TouchableOpacity
       style={styles.dealCard}
       onPress={() => setSelectedDeal(item)}
       activeOpacity={0.7}
     >
-      <View style={styles.dealHeader}>
-        <View style={[styles.sourceBadge, { backgroundColor: getSourceColor(item.source) + '20' }]}>
-          <Ionicons name={getSourceIcon(item.source) as any} size={14} color={getSourceColor(item.source)} />
-          <Text style={[styles.sourceText, { color: getSourceColor(item.source) }]}>
-            {item.source.replace('_', ' ')}
-          </Text>
+      {/* Image */}
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={styles.dealImage} resizeMode="cover" />
+      ) : (
+        <View style={styles.dealImagePlaceholder}>
+          <Ionicons name="airplane-outline" size={32} color={Colors.onSurfaceDim + '40'} />
         </View>
-        {item.is_error_fare && (
-          <View style={styles.errorFareBadge}>
-            <Ionicons name="flash" size={12} color="#fff" />
-            <Text style={styles.errorFareText}>Error Fare</Text>
+      )}
+
+      <View style={styles.dealBody}>
+        {/* Header row */}
+        <View style={styles.dealHeaderRow}>
+          <View style={[styles.sourcePill, { backgroundColor: getSourceColor(item.source) + '18' }]}>
+            <Ionicons name={getSourceIcon(item.source) as any} size={12} color={getSourceColor(item.source)} />
+            <Text style={[styles.sourceLabel, { color: getSourceColor(item.source) }]}>
+              {item.source.replace('_', ' ')}
+            </Text>
+          </View>
+          {item.is_error_fare && (
+            <View style={styles.errorFarePill}>
+              <Ionicons name="flash" size={10} color="#fff" />
+              <Text style={styles.errorFareLabel}>Error Fare</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Title */}
+        <Text style={styles.dealTitle} numberOfLines={2}>{item.title}</Text>
+
+        {/* Footer */}
+        <View style={styles.dealFooter}>
+          {item.price !== null ? (
+            <Text style={styles.dealPrice}>
+              {item.currency === 'EUR' ? '\u20ac' : '$'}{Math.round(item.price)}
+            </Text>
+          ) : <View />}
+          <View style={styles.dealMeta}>
+            {item.destination && (
+              <View style={styles.metaChip}>
+                <Ionicons name="location-outline" size={11} color={Colors.onSurfaceDim} />
+                <Text style={styles.metaText}>{item.destination}</Text>
+              </View>
+            )}
+            <Text style={styles.timeAgo}>{formatTimeAgo(item.published_at || item.fetched_at)}</Text>
+          </View>
+        </View>
+
+        {/* Tags */}
+        {item.tags.length > 0 && (
+          <View style={styles.tagsRow}>
+            {item.tags.slice(0, 3).map((tag, i) => (
+              <View key={i} style={styles.tagChip}>
+                <Text style={styles.tagText}>{tag.replace('_', ' ')}</Text>
+              </View>
+            ))}
           </View>
         )}
       </View>
-
-      <Text style={styles.dealTitle} numberOfLines={3}>{item.title}</Text>
-
-      {/* Deal Image */}
-      {item.image_url ? (
-        <Image
-          source={{ uri: item.image_url }}
-          style={styles.dealImage}
-          resizeMode="cover"
-        />
-      ) : null}
-
-      <View style={styles.dealFooter}>
-        {item.price !== null && (
-          <Text style={styles.dealPrice}>
-            {item.currency === 'EUR' ? '\u20ac' : '$'}{Math.round(item.price)}
-          </Text>
-        )}
-        <View style={styles.dealMeta}>
-          {item.destination && (
-            <View style={styles.metaChip}>
-              <Ionicons name="location-outline" size={12} color={Colors.onSurfaceDim} />
-              <Text style={styles.metaText}>{item.destination}</Text>
-            </View>
-          )}
-          <Text style={styles.timeAgo}>{formatTimeAgo(item.published_at || item.fetched_at)}</Text>
-        </View>
-      </View>
-
-      {item.tags.length > 0 && (
-        <View style={styles.tagsRow}>
-          {item.tags.map((tag, i) => (
-            <View key={i} style={styles.tagChip}>
-              <Text style={styles.tagText}>{tag.replace('_', ' ')}</Text>
-            </View>
-          ))}
-        </View>
-      )}
     </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.coral} />
-          <Text style={styles.loadingText}>Buscando ofertas...</Text>
+          <Ionicons name="flash" size={48} color={Colors.coral} />
+          <Text style={styles.loadingTitle}>Buscando ofertas...</Text>
           <Text style={styles.loadingSubtext}>Escaneando feeds de vuelos baratos</Text>
+          <ActivityIndicator size="small" color={Colors.coral} style={{ marginTop: 16 }} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Ofertas Flash</Text>
-        <Text style={styles.headerSubtitle}>Error fares y vuelos baratos en tiempo real</Text>
+        <View>
+          <Text style={styles.headerTitle}>Ofertas Flash</Text>
+          <Text style={styles.headerSubtitle}>Error fares y vuelos baratos</Text>
+        </View>
+        <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn} activeOpacity={0.6}>
+          <Ionicons name="refresh" size={20} color={Colors.coral} />
+        </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}
@@ -180,16 +191,17 @@ export default function DealsScreen() {
         {[
           { key: 'all', label: 'Todas', icon: 'grid-outline' },
           { key: 'error_fares', label: 'Error Fares', icon: 'flash-outline' },
-          { key: 'budget', label: 'Menos de 100\u20ac', icon: 'wallet-outline' },
+          { key: 'budget', label: '<100\u20ac', icon: 'wallet-outline' },
         ].map((f) => (
           <TouchableOpacity
             key={f.key}
             style={[styles.filterTab, filter === f.key && styles.filterTabActive]}
             onPress={() => setFilter(f.key as any)}
+            activeOpacity={0.7}
           >
             <Ionicons
               name={f.icon as any}
-              size={16}
+              size={14}
               color={filter === f.key ? '#fff' : Colors.onSurfaceDim}
             />
             <Text style={[styles.filterTabText, filter === f.key && styles.filterTabTextActive]}>
@@ -197,6 +209,9 @@ export default function DealsScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+        <View style={styles.filterCount}>
+          <Text style={styles.filterCountText}>{filteredDeals.length}</Text>
+        </View>
       </View>
 
       <FlatList
@@ -209,8 +224,8 @@ export default function DealsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="airplane-outline" size={48} color={Colors.onSurfaceDim} />
-            <Text style={styles.emptyText}>No hay ofertas disponibles</Text>
+            <Ionicons name="airplane-outline" size={56} color={Colors.onSurfaceDim + '50'} />
+            <Text style={styles.emptyTitle}>Sin ofertas disponibles</Text>
             <Text style={styles.emptySubtext}>Tira hacia abajo para actualizar</Text>
           </View>
         }
@@ -225,11 +240,12 @@ export default function DealsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <TouchableOpacity
               style={styles.modalClose}
               onPress={() => setSelectedDeal(null)}
             >
-              <Ionicons name="close" size={24} color={Colors.onSurface} />
+              <Ionicons name="close" size={22} color={Colors.onSurface} />
             </TouchableOpacity>
 
             {selectedDeal && (
@@ -243,9 +259,9 @@ export default function DealsScreen() {
                 ) : null}
 
                 <View style={styles.modalBody}>
-                  <View style={[styles.sourceBadge, { backgroundColor: getSourceColor(selectedDeal.source) + '20', marginBottom: Spacing.md }]}>
+                  <View style={[styles.sourcePill, { backgroundColor: getSourceColor(selectedDeal.source) + '18', marginBottom: Spacing.md }]}>
                     <Ionicons name={getSourceIcon(selectedDeal.source) as any} size={14} color={getSourceColor(selectedDeal.source)} />
-                    <Text style={[styles.sourceText, { color: getSourceColor(selectedDeal.source) }]}>
+                    <Text style={[styles.sourceLabel, { color: getSourceColor(selectedDeal.source) }]}>
                       {selectedDeal.source.replace('_', ' ')}
                     </Text>
                   </View>
@@ -291,9 +307,12 @@ export default function DealsScreen() {
                     </View>
                   )}
 
-                  <Text style={styles.modalHint}>
-                    Busca este vuelo directamente en tu buscador favorito (Skyscanner, Google Flights) para reservar.
-                  </Text>
+                  <View style={styles.modalHintCard}>
+                    <Ionicons name="information-circle-outline" size={18} color={Colors.onSurfaceDim} />
+                    <Text style={styles.modalHintText}>
+                      Busca este vuelo en Skyscanner o Google Flights para reservar.
+                    </Text>
+                  </View>
                 </View>
               </ScrollView>
             )}
@@ -305,67 +324,117 @@ export default function DealsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+
+  // Header
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
   headerTitle: {
-    ...Typography.h2,
+    fontSize: 24,
+    fontWeight: '800',
     color: Colors.onSurface,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    ...Typography.body,
+    fontSize: 13,
     color: Colors.onSurfaceDim,
     marginTop: 2,
   },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,77,77,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Filters
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
+    gap: 8,
+    alignItems: 'center',
   },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.surfaceHigh,
-    gap: 4,
+    backgroundColor: Colors.surface,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: Colors.surfaceMid,
   },
   filterTabActive: {
     backgroundColor: Colors.coral,
+    borderColor: Colors.coral,
   },
   filterTabText: {
     fontSize: 12,
+    fontWeight: '600',
     color: Colors.onSurfaceDim,
   },
   filterTabTextActive: {
     color: '#fff',
-    fontWeight: '600',
   },
+  filterCount: {
+    backgroundColor: Colors.surfaceMid,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 'auto',
+  },
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSurfaceDim,
+  },
+
+  // List
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
+    paddingTop: 4,
   },
+
+  // Deal Card
   dealCard: {
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 16,
-    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
+    overflow: 'hidden',
   },
-  dealHeader: {
+  dealImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: Colors.surfaceMid,
+  },
+  dealImagePlaceholder: {
+    width: '100%',
+    height: 80,
+    backgroundColor: Colors.surfaceMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dealBody: {
+    padding: Spacing.md,
+  },
+  dealHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    gap: 8,
+    marginBottom: 8,
   },
-  sourceBadge: {
+  sourcePill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -373,12 +442,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 4,
   },
-  sourceText: {
+  sourceLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
-  errorFareBadge: {
+  errorFarePill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF4444',
@@ -387,24 +456,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 3,
   },
-  errorFareText: {
+  errorFareLabel: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '700',
   },
   dealTitle: {
-    ...Typography.body,
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.onSurface,
-    fontWeight: '500',
-    lineHeight: 22,
-    marginBottom: Spacing.sm,
-  },
-  dealImage: {
-    width: '100%',
-    height: 140,
-    borderRadius: 10,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.surfaceMid,
+    lineHeight: 21,
+    marginBottom: 10,
   },
   dealFooter: {
     flexDirection: 'row',
@@ -419,7 +481,7 @@ const styles = StyleSheet.create({
   dealMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 8,
   },
   metaChip: {
     flexDirection: 'row',
@@ -427,22 +489,23 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.onSurfaceDim,
+    fontWeight: '500',
   },
   timeAgo: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.onSurfaceDim,
-    opacity: 0.7,
+    opacity: 0.6,
   },
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: Spacing.sm,
+    marginTop: 10,
   },
   tagChip: {
-    backgroundColor: Colors.coral + '15',
+    backgroundColor: 'rgba(255,77,77,0.08)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -453,43 +516,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
   },
-  loadingText: {
-    ...Typography.body,
-    color: Colors.onSurfaceDim,
-    marginTop: Spacing.lg,
+  loadingTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginTop: 8,
   },
   loadingSubtext: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.onSurfaceDim,
-    marginTop: Spacing.sm,
-    opacity: 0.7,
   },
+
+  // Empty
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
+    gap: 8,
   },
-  emptyText: {
-    ...Typography.body,
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.onSurfaceDim,
-    marginTop: Spacing.md,
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.onSurfaceDim,
-    marginTop: Spacing.xs,
-    opacity: 0.7,
+    opacity: 0.6,
   },
-  // Modal styles
+
+  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -499,6 +567,14 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     paddingBottom: 40,
   },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.surfaceMid,
+    alignSelf: 'center',
+    marginTop: 10,
+  },
   modalClose: {
     position: 'absolute',
     top: Spacing.md,
@@ -507,25 +583,23 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalImage: {
     width: '100%',
     height: 200,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
   },
   modalBody: {
     padding: Spacing.lg,
   },
   modalTitle: {
-    ...Typography.h2,
-    color: Colors.onSurface,
     fontSize: 18,
-    marginBottom: Spacing.md,
+    fontWeight: '700',
+    color: Colors.onSurface,
     lineHeight: 24,
+    marginBottom: Spacing.md,
   },
   modalPrice: {
     fontSize: 28,
@@ -540,18 +614,19 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   modalInfoText: {
-    ...Typography.body,
-    color: Colors.onSurface,
     fontSize: 15,
+    color: Colors.onSurface,
   },
   modalWarning: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.sm,
-    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    backgroundColor: 'rgba(255, 152, 0, 0.08)',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginTop: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 152, 0, 0.15)',
   },
   modalWarningText: {
     flex: 1,
@@ -559,13 +634,19 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
     lineHeight: 19,
   },
-  modalHint: {
-    ...Typography.body,
-    color: Colors.onSurfaceDim,
-    fontSize: 13,
+  modalHintCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
     marginTop: Spacing.xl,
-    textAlign: 'center',
+  },
+  modalHintText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
     lineHeight: 19,
-    fontStyle: 'italic',
   },
 });

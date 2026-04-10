@@ -107,24 +107,19 @@ export const Typography = {
 
 export const Shadows = {
   card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 60,
-    elevation: 20,
-  },
-  button: {
-    shadowColor: Colors.coral,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.3,
-    shadowRadius: 40,
+    boxShadow: '0px 12px 40px rgba(0, 0, 0, 0.4)',
     elevation: 16,
   },
+  button: {
+    boxShadow: '0px 8px 24px rgba(255, 77, 77, 0.35)',
+    elevation: 12,
+  },
   small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.25)',
     elevation: 4,
+  },
+  glow: {
+    boxShadow: '0px 0px 20px rgba(255, 77, 77, 0.2)',
+    elevation: 8,
   },
 };

@@ -29,6 +29,12 @@ Mobile-first travel app where students enter dates + mood + budget and get 3 bes
 - [x] SubsidyBadge in results.tsx
 - [x] Toast notification component
 - [x] Error handling in results (empty/error states)
+- [x] UI Modernization: profile.tsx (avatar ring, stats row, preferences, settings sections)
+- [x] UI Modernization: home.tsx (greeting header, search card, mood grid, trending carousel)
+- [x] UI Modernization: deals.tsx (filter tabs, deal cards with images/tags, detail modal)
+- [x] UI Modernization: results.tsx (loading animation, gradient cards, price box, CTA)
+- [x] Fixed deprecated shadow* props → boxShadow across theme.ts, Card.tsx, Toast.tsx
+- [x] Modernized tab bar layout
 
 ## Pending
 - [ ] Stripe Payment integration

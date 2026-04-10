@@ -13,10 +13,10 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
-import { Button } from '../../src/components/Button';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUserStore } from '../../src/store/userStore';
 import { useSearchStore } from '../../src/store/searchStore';
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography } from '../../src/constants/theme';
 import { MOODS } from '../../src/constants/moods';
 import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,13 +24,13 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.7;
+const CARD_WIDTH = width * 0.65;
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useUserStore();
   const { setDates, setMood, selectedMood } = useSearchStore();
-  
+
   const [departureDate, setDepartureDate] = useState<Date | null>(null);
   const [returnDate, setReturnDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -39,14 +39,12 @@ export default function HomeScreen() {
 
   const handleDateSelect = (day: any) => {
     const selectedDate = new Date(day.dateString);
-    
+
     if (calendarMode === 'departure') {
       setDepartureDate(selectedDate);
-      // Clear return date if it's before new departure date
       if (returnDate && returnDate <= selectedDate) {
         setReturnDate(null);
       }
-      // Auto-switch to return date selection
       setTimeout(() => {
         setCalendarMode('return');
       }, 300);
@@ -63,7 +61,7 @@ export default function HomeScreen() {
 
   const getMarkedDates = () => {
     const marked: any = {};
-    
+
     if (departureDate) {
       const depKey = format(departureDate, 'yyyy-MM-dd');
       marked[depKey] = {
@@ -72,7 +70,7 @@ export default function HomeScreen() {
         textColor: Colors.white,
       };
     }
-    
+
     if (returnDate) {
       const retKey = format(returnDate, 'yyyy-MM-dd');
       marked[retKey] = {
@@ -81,8 +79,7 @@ export default function HomeScreen() {
         textColor: Colors.white,
       };
     }
-    
-    // Fill in-between dates
+
     if (departureDate && returnDate) {
       const start = new Date(departureDate);
       const end = new Date(returnDate);
@@ -97,25 +94,18 @@ export default function HomeScreen() {
         current.setDate(current.getDate() + 1);
       }
     }
-    
+
     return marked;
   };
 
   const handleSearch = async () => {
-    if (!departureDate || !returnDate || !currentMood) {
-      return;
-    }
-
-    // Validate that return date is after departure date
+    if (!departureDate || !returnDate || !currentMood) return;
     if (returnDate <= departureDate) {
-      alert('La fecha de regreso debe ser después de la fecha de salida');
+      alert('La fecha de regreso debe ser despues de la fecha de salida');
       return;
     }
-
     setDates(departureDate, returnDate);
     setMood(currentMood);
-
-    // Navigate to results immediately — loading happens there
     router.push('/results');
   };
 
@@ -124,6 +114,13 @@ export default function HomeScreen() {
   };
 
   const canSearch = departureDate && returnDate && currentMood && returnDate > departureDate;
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos dias';
+    if (hour < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -135,86 +132,103 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Hola {user?.firstName || 'viajero'},</Text>
-            <Text style={styles.hero}>¿a dónde?</Text>
+            <Text style={styles.greeting}>{getGreeting()}, {user?.firstName || 'viajero'}</Text>
+            <Text style={styles.hero}>¿A donde{'\n'}vamos?</Text>
           </View>
-          <TouchableOpacity style={styles.avatar}>
+          <TouchableOpacity
+            style={styles.avatar}
+            onPress={() => router.push('/(tabs)/profile')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.avatarText}>
               {user?.firstName?.charAt(0).toUpperCase() || 'U'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Search Form */}
-        <View style={styles.searchForm}>
-          {/* Dates */}
-          <View style={styles.dateContainer}>
+        {/* Search Card */}
+        <View style={styles.searchCard}>
+          {/* Date Row */}
+          <View style={styles.dateRow}>
             <TouchableOpacity
-              style={styles.dateButton}
+              style={[styles.dateCell, departureDate && styles.dateCellFilled]}
               onPress={() => openCalendar('departure')}
+              activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
-              <Text style={styles.dateLabel}>Salida</Text>
-              <Text style={styles.dateValue}>
-                {departureDate ? format(departureDate, 'dd MMM', { locale: es }) : 'Seleccionar'}
-              </Text>
+              <Ionicons name="calendar-outline" size={18} color={departureDate ? Colors.coral : Colors.onSurfaceDim} />
+              <View>
+                <Text style={styles.dateCellLabel}>Salida</Text>
+                <Text style={[styles.dateCellValue, departureDate && styles.dateCellValueFilled]}>
+                  {departureDate ? format(departureDate, 'dd MMM yyyy', { locale: es }) : 'Seleccionar'}
+                </Text>
+              </View>
             </TouchableOpacity>
 
-            <View style={styles.dateDivider} />
+            <View style={styles.dateArrow}>
+              <Ionicons name="arrow-forward" size={16} color={Colors.onSurfaceDim} />
+            </View>
 
             <TouchableOpacity
-              style={styles.dateButton}
+              style={[styles.dateCell, returnDate && styles.dateCellFilled]}
               onPress={() => openCalendar('return')}
+              activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
-              <Text style={styles.dateLabel}>Regreso</Text>
-              <Text style={styles.dateValue}>
-                {returnDate ? format(returnDate, 'dd MMM', { locale: es }) : 'Seleccionar'}
-              </Text>
+              <Ionicons name="calendar-outline" size={18} color={returnDate ? Colors.teal : Colors.onSurfaceDim} />
+              <View>
+                <Text style={styles.dateCellLabel}>Regreso</Text>
+                <Text style={[styles.dateCellValue, returnDate && { color: Colors.teal }]}>
+                  {returnDate ? format(returnDate, 'dd MMM yyyy', { locale: es }) : 'Seleccionar'}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
           {/* Mood Selector */}
-          <View style={styles.moodContainer}>
-            <Text style={styles.moodTitle}>Selecciona tu mood</Text>
-            <View style={styles.moodGrid}>
-              {MOODS.slice(0, 4).map(mood => (
-                <TouchableOpacity
-                  key={mood.id}
-                  style={[
-                    styles.moodButton,
-                    currentMood === mood.id && styles.moodButtonActive,
-                  ]}
-                  onPress={() => handleMoodSelect(mood.id)}
-                >
-                  <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-                  <Text style={[
-                    styles.moodLabel,
-                    currentMood === mood.id && styles.moodLabelActive,
-                  ]}>
-                    {mood.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <Text style={styles.moodTitle}>¿Que mood tienes?</Text>
+          <View style={styles.moodGrid}>
+            {MOODS.slice(0, 4).map(mood => (
+              <TouchableOpacity
+                key={mood.id}
+                style={[
+                  styles.moodBtn,
+                  currentMood === mood.id && styles.moodBtnActive,
+                ]}
+                onPress={() => handleMoodSelect(mood.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                <Text style={[
+                  styles.moodLabel,
+                  currentMood === mood.id && styles.moodLabelActive,
+                ]}>
+                  {mood.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Search Button */}
-          <Button
-            title="Encontrar mi viaje →"
+          <TouchableOpacity
+            style={[styles.searchBtn, !canSearch && styles.searchBtnDisabled]}
             onPress={handleSearch}
             disabled={!canSearch}
-            style={styles.searchButton}
-          />
+            activeOpacity={0.8}
+          >
+            <Ionicons name="search" size={20} color={Colors.white} />
+            <Text style={styles.searchBtnText}>Encontrar mi viaje</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Trending Section */}
         <View style={styles.trendingSection}>
-          <View style={styles.trendingSectionHeader}>
-            <Text style={styles.trendingLabel}>DESTINOS POPULARES</Text>
-            <Text style={styles.trendingTitle}>Descubre el Mundo</Text>
+          <View style={styles.trendingHeader}>
+            <View>
+              <Text style={styles.trendingLabel}>POPULARES</Text>
+              <Text style={styles.trendingTitle}>Descubre el mundo</Text>
+            </View>
+            <Ionicons name="compass-outline" size={22} color={Colors.onSurfaceDim} />
           </View>
-          
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -224,19 +238,25 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={dest.id}
                 style={styles.trendingCard}
+                activeOpacity={0.9}
                 onPress={() => router.push(`/detail/${dest.id}`)}
               >
                 <Image
                   source={{ uri: dest.imageUrl }}
                   style={styles.trendingImage}
                 />
-                <View style={styles.trendingOverlay}>
-                  <Text style={styles.trendingCity}>{dest.city}</Text>
-                  <Text style={styles.trendingCountry}>{dest.country}</Text>
-                  <View style={styles.trendingPrice}>
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.75)']}
+                  style={styles.trendingGradient}
+                >
+                  <View style={styles.trendingInfo}>
+                    <Text style={styles.trendingCity}>{dest.city}</Text>
+                    <Text style={styles.trendingCountry}>{dest.country}</Text>
+                  </View>
+                  <View style={styles.trendingPricePill}>
                     <Text style={styles.trendingPriceText}>desde {dest.totalPrice}€</Text>
                   </View>
-                </View>
+                </LinearGradient>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -250,22 +270,30 @@ export default function HomeScreen() {
         transparent
         onRequestClose={() => setShowCalendar(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowCalendar(false)}
         >
           <View style={styles.calendarModal}>
+            <View style={styles.calendarHandle} />
             <View style={styles.calendarHeader}>
-              <TouchableOpacity onPress={() => setShowCalendar(false)}>
-                <Text style={styles.calendarButton}>Cancelar</Text>
+              <View>
+                <Text style={styles.calendarTitle}>
+                  {calendarMode === 'departure' ? 'Fecha de salida' : 'Fecha de regreso'}
+                </Text>
+                <Text style={styles.calendarSubtitle}>
+                  {calendarMode === 'departure' ? 'Selecciona cuando sales' : 'Selecciona cuando vuelves'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCalendar(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={28} color={Colors.onSurfaceDim} />
               </TouchableOpacity>
-              <Text style={styles.calendarTitle}>
-                {calendarMode === 'departure' ? 'Fecha de Salida' : 'Fecha de Regreso'}
-              </Text>
-              <View style={{ width: 80 }} />
             </View>
-            
+
             <Calendar
               onDayPress={handleDateSelect}
               markedDates={getMarkedDates()}
@@ -281,7 +309,7 @@ export default function HomeScreen() {
                 dayTextColor: Colors.onSurface,
                 textDisabledColor: Colors.onSurfaceDim + '40',
                 monthTextColor: Colors.onSurface,
-                textMonthFontWeight: '600',
+                textMonthFontWeight: '700',
                 textDayFontSize: 16,
                 textMonthFontSize: 18,
                 arrowColor: Colors.coral,
@@ -296,195 +324,245 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: Spacing.xxxl,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: Spacing.xxxl + 20 },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
-  headerLeft: {
-    flex: 1,
-  },
+  headerLeft: { flex: 1 },
   greeting: {
-    ...Typography.body,
+    fontSize: 14,
     color: Colors.onSurfaceDim,
-    marginBottom: Spacing.xs,
+    fontWeight: '500',
+    marginBottom: 4,
   },
   hero: {
-    ...Typography.displayMedium,
-    color: Colors.coral,
+    fontSize: 36,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    letterSpacing: -1,
+    lineHeight: 42,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 4,
   },
   avatarText: {
     color: Colors.white,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
   },
-  searchForm: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xxxl,
-  },
-  dateContainer: {
-    flexDirection: 'row',
+
+  // Search Card
+  searchCard: {
+    marginHorizontal: Spacing.lg,
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.pill,
-    padding: Spacing.sm,
-    marginBottom: Spacing.lg,
-    ...Shadows.small,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
-  dateButton: {
-    flex: 1,
+  dateRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  dateDivider: {
-    width: 1,
-    backgroundColor: Colors.surfaceMid,
-    marginVertical: Spacing.sm,
-  },
-  dateLabel: {
-    ...Typography.label,
-    color: Colors.onSurfaceDim,
-    fontSize: 10,
-    marginTop: Spacing.xs,
-  },
-  dateValue: {
-    ...Typography.bodySemibold,
-    color: Colors.onSurface,
-    marginTop: 4,
-  },
-  moodContainer: {
     marginBottom: Spacing.lg,
   },
+  dateCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceMid,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  dateCellFilled: {
+    borderColor: 'rgba(255,77,77,0.25)',
+    backgroundColor: 'rgba(255,77,77,0.05)',
+  },
+  dateCellLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.onSurfaceDim,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dateCellValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.onSurfaceDim,
+    marginTop: 2,
+  },
+  dateCellValueFilled: {
+    color: Colors.coral,
+  },
+  dateArrow: {
+    width: 28,
+    alignItems: 'center',
+  },
+
+  // Mood
   moodTitle: {
-    ...Typography.bodySemibold,
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.onSurface,
     marginBottom: Spacing.md,
   },
   moodGrid: {
     flexDirection: 'row',
     gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
-  moodButton: {
+  moodBtn: {
     flex: 1,
     aspectRatio: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceMid,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  moodButtonActive: {
+  moodBtnActive: {
     backgroundColor: Colors.coral,
     borderColor: Colors.coral,
   },
   moodEmoji: {
-    fontSize: 28,
-    marginBottom: Spacing.xs,
+    fontSize: 26,
+    marginBottom: 4,
   },
   moodLabel: {
-    ...Typography.bodySemibold,
-    color: Colors.onSurface,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSurfaceDim,
   },
   moodLabelActive: {
     color: Colors.white,
   },
-  searchButton: {
-    marginTop: Spacing.md,
+
+  // Search Button
+  searchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.coral,
+    borderRadius: BorderRadius.pill,
+    paddingVertical: 16,
   },
-  trendingSection: {
-    marginTop: Spacing.xl,
+  searchBtnDisabled: { opacity: 0.4 },
+  searchBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.white,
   },
-  trendingSectionHeader: {
+
+  // Trending
+  trendingSection: { marginTop: Spacing.sm },
+  trendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   trendingLabel: {
-    ...Typography.label,
+    fontSize: 11,
+    fontWeight: '800',
     color: Colors.onSurfaceDim,
-    marginBottom: Spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
   trendingTitle: {
-    ...Typography.displaySmall,
+    fontSize: 22,
+    fontWeight: '800',
     color: Colors.onSurface,
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
   trendingScroll: {
     paddingLeft: Spacing.lg,
-    paddingRight: Spacing.lg,
+    paddingRight: Spacing.md,
   },
   trendingCard: {
     width: CARD_WIDTH,
-    height: 300,
+    height: 240,
     borderRadius: BorderRadius.lg,
     marginRight: Spacing.md,
     overflow: 'hidden',
-    ...Shadows.card,
+    backgroundColor: Colors.surfaceMid,
   },
   trendingImage: {
     width: '100%',
     height: '100%',
   },
-  trendingOverlay: {
+  trendingGradient: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
-    padding: Spacing.lg,
+    padding: Spacing.md,
+  },
+  trendingInfo: {
+    marginBottom: 6,
   },
   trendingCity: {
-    ...Typography.h1,
+    fontSize: 22,
+    fontWeight: '800',
     color: Colors.white,
-    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   trendingCountry: {
-    ...Typography.body,
-    color: Colors.white,
-    opacity: 0.9,
-    marginBottom: Spacing.sm,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
   },
-  trendingPrice: {
+  trendingPricePill: {
     backgroundColor: Colors.coral,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill,
     alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   trendingPriceText: {
-    ...Typography.bodySemibold,
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.white,
-    fontSize: 14,
   },
-  // Date Picker Modal Styles
+
+  // Calendar Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   calendarModal: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.lg,
-    borderTopRightRadius: BorderRadius.lg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingBottom: Spacing.xl,
+  },
+  calendarHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.surfaceMid,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 6,
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -492,24 +570,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceMid,
   },
   calendarTitle: {
-    ...Typography.h3,
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.onSurface,
   },
-  calendarButton: {
-    ...Typography.bodySemibold,
-    color: Colors.coral,
-    fontSize: 16,
+  calendarSubtitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
+    marginTop: 2,
   },
   calendar: {
     borderRadius: BorderRadius.md,
-    margin: Spacing.lg,
-  },
-  dateLabelDisabled: {
-    color: Colors.onSurfaceDim,
-    opacity: 0.5,
+    marginHorizontal: Spacing.lg,
   },
 });

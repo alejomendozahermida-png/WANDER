@@ -6,7 +6,6 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
   Animated,
 } from 'react-native';
@@ -23,8 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const { height } = Dimensions.get('window');
-const CARD_HEIGHT = height * 0.65;
+const { height, width } = Dimensions.get('window');
+const CARD_HEIGHT = height * 0.62;
 
 interface Badge {
   type: 'cheapest' | 'best-value' | 'hidden-gem';
@@ -34,24 +33,9 @@ interface Badge {
 }
 
 const BADGES: Record<string, Badge> = {
-  cheapest: {
-    type: 'cheapest',
-    emoji: '🔥',
-    label: 'Opción más económica',
-    color: Colors.coral,
-  },
-  'best-value': {
-    type: 'best-value',
-    emoji: '⭐',
-    label: 'Mejor relación calidad-precio',
-    color: Colors.sand,
-  },
-  'hidden-gem': {
-    type: 'hidden-gem',
-    emoji: '💎',
-    label: 'Joya oculta',
-    color: Colors.teal,
-  },
+  cheapest: { type: 'cheapest', emoji: '🔥', label: 'Mas economica', color: Colors.coral },
+  'best-value': { type: 'best-value', emoji: '⭐', label: 'Mejor calidad-precio', color: Colors.sand },
+  'hidden-gem': { type: 'hidden-gem', emoji: '💎', label: 'Joya oculta', color: Colors.teal },
 };
 
 export default function ResultsScreen() {
@@ -63,9 +47,10 @@ export default function ResultsScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [subsidyData, setSubsidyData] = useState<SubsidyResult | null>(null);
 
-  // Loading animation - airplane float
+  // Animations
   const floatAnim = useRef(new Animated.Value(0)).current;
-  const dotAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
   useEffect(() => {
     if (!loading) return;
     const float = Animated.loop(
@@ -74,12 +59,15 @@ export default function ResultsScreen() {
         Animated.timing(floatAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
     );
-    const dots = Animated.loop(
-      Animated.timing(dotAnim, { toValue: 1, duration: 2000, useNativeDriver: true })
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 1000, useNativeDriver: true }),
+      ])
     );
     float.start();
-    dots.start();
-    return () => { float.stop(); dots.stop(); };
+    pulse.start();
+    return () => { float.stop(); pulse.stop(); };
   }, [loading]);
 
   useEffect(() => {
@@ -95,14 +83,13 @@ export default function ResultsScreen() {
     setLoading(true);
     setSearching(true);
 
-    // Rotate loading messages for better UX during long API calls
     const messages = [
-      'Conectando con aerolíneas...',
+      'Conectando con aerolineas...',
       'Buscando vuelos baratos...',
-      'Comparando precios de vuelos...',
+      'Comparando precios...',
       'Buscando hoteles en Booking.com...',
       'Calculando precio total real...',
-      'Casi listo, seleccionando las mejores opciones...',
+      'Seleccionando las mejores opciones...',
     ];
     let msgIdx = 0;
     const msgInterval = setInterval(() => {
@@ -111,7 +98,6 @@ export default function ResultsScreen() {
     }, 6000);
 
     try {
-      // Load destinations and subsidies in parallel
       const [destinations, subsidies] = await Promise.all([
         searchDestinations(
           format(departureDate, 'yyyy-MM-dd'),
@@ -128,10 +114,10 @@ export default function ResultsScreen() {
           has_erasmus: false,
         }).catch(() => null),
       ]);
-      
+
       setResults(destinations);
       setSubsidyData(subsidies);
-      
+
       if (destinations.length === 0) {
         setSearchError('No encontramos vuelos para estas fechas. Prueba con otras fechas o un presupuesto mayor.');
       }
@@ -145,67 +131,51 @@ export default function ResultsScreen() {
     }
   };
 
-  const renderLoadingScreen = () => {
-    const translateY = floatAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, -15],
-    });
-    const rotate = dotAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '360deg'],
-    });
-
-    return (
-      <View style={styles.loadingContainer}>
-        <Animated.View style={{ transform: [{ translateY }] }}>
-          <Ionicons name="airplane" size={56} color={Colors.coral} />
-        </Animated.View>
-        <Text style={styles.loadingTitle}>Buscando tu destino ideal</Text>
-        <Text style={styles.loadingText}>{loadingMessage}</Text>
-        <View style={styles.loadingDotsRow}>
-          <Animated.View style={[styles.loadingDot, { opacity: floatAnim }]} />
-          <Animated.View style={[styles.loadingDot, { opacity: floatAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.4, 1] }) }]} />
-          <Animated.View style={[styles.loadingDot, { opacity: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] }) }]} />
-        </View>
-      </View>
-    );
-  };
-
   if (loading) {
+    const translateY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -15] });
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        {renderLoadingScreen()}
+        <View style={styles.loadingContainer}>
+          <Animated.View style={{ transform: [{ translateY }] }}>
+            <Ionicons name="airplane" size={52} color={Colors.coral} />
+          </Animated.View>
+          <Text style={styles.loadingTitle}>Buscando tu destino ideal</Text>
+          <Text style={styles.loadingMsg}>{loadingMessage}</Text>
+          <View style={styles.loadingDotsRow}>
+            {[0, 1, 2].map(i => (
+              <Animated.View
+                key={i}
+                style={[styles.loadingDot, { opacity: pulseAnim, transform: [{ scale: pulseAnim.interpolate({ inputRange: [0.4, 1], outputRange: [0.8, 1] }) }] }]}
+              />
+            ))}
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
 
-  // Error or empty state
   if (searchError || results.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.onSurface} />
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={Colors.onSurface} />
           </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Wander</Text>
-          </View>
-          <View style={styles.backButton} />
+          <Text style={styles.headerTitle}>Resultados</Text>
+          <View style={{ width: 40 }} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="airplane-outline" size={64} color={Colors.onSurfaceDim} />
+          <Ionicons name="cloud-offline-outline" size={56} color={Colors.onSurfaceDim + '50'} />
           <Text style={styles.errorTitle}>
             {searchError || 'No encontramos vuelos para estas fechas'}
           </Text>
-          <Text style={styles.errorSubtitle}>
-            Prueba con otras fechas o un presupuesto mayor
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => { setSearchError(null); loadResults(); }}>
-            <Ionicons name="refresh" size={20} color={Colors.white} />
-            <Text style={styles.retryText}>Reintentar</Text>
+          <Text style={styles.errorSubtitle}>Prueba con otras fechas o un presupuesto mayor</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => { setSearchError(null); loadResults(); }}>
+            <Ionicons name="refresh" size={18} color={Colors.white} />
+            <Text style={styles.retryBtnText}>Reintentar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.backToSearchButton} onPress={() => router.back()}>
-            <Text style={styles.backToSearchText}>Cambiar busqueda</Text>
+          <TouchableOpacity style={styles.changeSearchBtn} onPress={() => router.back()}>
+            <Text style={styles.changeSearchText}>Cambiar busqueda</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -214,22 +184,19 @@ export default function ResultsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.onSurface} />
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={Colors.onSurface} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Wander</Text>
-        </View>
-        <View style={styles.backButton} />
+        <Text style={styles.headerTitle}>Wander</Text>
+        <View style={{ width: 40 }} />
       </View>
 
+      {/* Subheader */}
       <View style={styles.subHeader}>
-        <Text style={styles.subHeaderLabel}>3 DESTINOS PERFECTOS</Text>
-        <Text style={styles.subHeaderTitle}>Tus escapadas curadas</Text>
+        <Text style={styles.subLabel}>3 DESTINOS PERFECTOS</Text>
+        <Text style={styles.subTitle}>Tus escapadas curadas</Text>
       </View>
 
       <ScrollView
@@ -239,7 +206,7 @@ export default function ResultsScreen() {
       >
         {results.map((destination, index) => {
           const badge = BADGES[destination.badge || 'best-value'];
-          
+
           return (
             <TouchableOpacity
               key={destination.id}
@@ -252,79 +219,79 @@ export default function ResultsScreen() {
                 style={styles.cardImage}
                 defaultSource={require('../assets/images/icon.png')}
               />
-              {/* Fallback background if image doesn't load */}
               <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface, zIndex: -1 }]} />
-              
+
               <LinearGradient
-                colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.85)']}
-                locations={[0, 0.35, 1]}
+                colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.85)']}
+                locations={[0, 0.3, 1]}
                 style={styles.gradient}
               >
-                {/* Badges Row - Top */}
+                {/* Top badges */}
                 <View style={styles.badgesRow}>
-                  <View style={[styles.badge, { backgroundColor: badge.color }]}>
+                  <View style={[styles.badgePill, { backgroundColor: badge.color }]}>
                     <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
-                    <Text style={styles.badgeText}>{badge.label}</Text>
+                    <Text style={styles.badgeLabel}>{badge.label}</Text>
                   </View>
                   {destination.budgetTag === 'stretch' && (
-                    <View style={styles.budgetStretchBadge}>
-                      <Text style={styles.budgetStretchText}>Supera tu presupuesto</Text>
+                    <View style={[styles.budgetPill, { backgroundColor: '#FF9800' }]}>
+                      <Text style={styles.budgetPillText}>Supera presupuesto</Text>
                     </View>
                   )}
                   {destination.budgetTag === 'worth-it' && (
-                    <View style={styles.budgetWorthBadge}>
-                      <Text style={styles.budgetWorthText}>Vale la pena</Text>
+                    <View style={[styles.budgetPill, { backgroundColor: '#4CAF50' }]}>
+                      <Text style={styles.budgetPillText}>Vale la pena</Text>
                     </View>
                   )}
                 </View>
 
-                {/* Content Container - Bottom */}
-                <View style={styles.cardContent}>
-                  {/* Visa Status */}
-                  <View style={styles.visaContainer}>
+                {/* Bottom content */}
+                <View style={styles.cardBottom}>
+                  {/* Visa */}
+                  <View style={styles.visaPill}>
                     <Text style={styles.visaEmoji}>🇪🇺</Text>
                     <Text style={styles.visaText}>
-                      {destination.visaFree ? 'Sin visa requerida' : 'Visa requerida'}
+                      {destination.visaFree ? 'Sin visa' : 'Visa requerida'}
                     </Text>
                   </View>
 
-                  {/* City Name */}
+                  {/* City */}
                   <Text style={styles.cityName}>{destination.city}</Text>
                   <Text style={styles.countryName}>{destination.country}</Text>
 
-                  {/* Price Breakdown */}
-                  <View style={styles.priceContainer}>
+                  {/* Price Box */}
+                  <View style={styles.priceBox}>
                     <View style={styles.priceRow}>
-                      <Ionicons name="airplane" size={16} color={Colors.white} />
+                      <Ionicons name="airplane" size={14} color="rgba(255,255,255,0.7)" />
                       <Text style={styles.priceLabel}>
-                        Vuelo{destination.flightDetails?.airline ? ` (${destination.flightDetails.airline})` : ''}
+                        Vuelo{destination.flightDetails?.airline ? ` · ${destination.flightDetails.airline}` : ''}
                       </Text>
-                      <Text style={styles.priceValue}>{destination.flightPrice}€</Text>
+                      <Text style={styles.priceVal}>{destination.flightPrice}€</Text>
                     </View>
                     {destination.flightDetails && (
-                      <View style={styles.flightMiniInfo}>
-                        <Text style={styles.flightMiniText}>
-                          {destination.flightDetails.outbound.duration} · {destination.flightDetails.outbound.stops === 0 ? 'Directo' : `${destination.flightDetails.outbound.stops} escala${destination.flightDetails.outbound.stops > 1 ? 's' : ''}`}
-                        </Text>
-                      </View>
+                      <Text style={styles.flightMini}>
+                        {destination.flightDetails.outbound.duration} · {destination.flightDetails.outbound.stops === 0 ? 'Directo' : `${destination.flightDetails.outbound.stops} escala${destination.flightDetails.outbound.stops > 1 ? 's' : ''}`}
+                      </Text>
                     )}
                     <View style={styles.priceRow}>
-                      <Ionicons name="bed" size={16} color={Colors.white} />
+                      <Ionicons name="bed" size={14} color="rgba(255,255,255,0.7)" />
                       <Text style={styles.priceLabel}>Alojamiento</Text>
-                      <Text style={styles.priceValue}>{destination.hotelPrice}€</Text>
+                      <Text style={styles.priceVal}>{destination.hotelPrice}€</Text>
                     </View>
-                    <View style={[styles.priceRow, styles.priceTotalRow]}>
-                      <Text style={styles.priceTotalLabel}>Total</Text>
-                      <Text style={styles.priceTotalValue}>{destination.totalPrice}€</Text>
+                    <View style={styles.priceDivider} />
+                    <View style={styles.priceRow}>
+                      <Text style={styles.totalLabel}>Total</Text>
+                      <Text style={styles.totalVal}>{destination.totalPrice}€</Text>
                     </View>
                   </View>
 
-                  {/* Arrow Button - Inside content */}
+                  {/* CTA */}
                   <TouchableOpacity
-                    style={styles.arrowButton}
+                    style={styles.ctaBtn}
                     onPress={() => router.push(`/detail/${destination.id}`)}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons name="arrow-forward" size={24} color={Colors.white} />
+                    <Text style={styles.ctaBtnText}>Ver detalles</Text>
+                    <Ionicons name="arrow-forward" size={18} color={Colors.white} />
                   </TouchableOpacity>
                 </View>
               </LinearGradient>
@@ -344,14 +311,11 @@ export default function ResultsScreen() {
           />
         )}
 
-        {/* Search Again Button */}
-        <View style={styles.searchAgainContainer}>
+        {/* Search Again */}
+        <View style={styles.searchAgain}>
           <Text style={styles.searchAgainTitle}>¿Ninguno te convence?</Text>
-          <TouchableOpacity
-            style={styles.searchAgainButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="refresh" size={24} color={Colors.coral} />
+          <TouchableOpacity style={styles.searchAgainBtn} onPress={() => router.back()}>
+            <Ionicons name="refresh" size={20} color={Colors.coral} />
             <Text style={styles.searchAgainText}>Buscar de nuevo</Text>
           </TouchableOpacity>
         </View>
@@ -361,44 +325,49 @@ export default function ResultsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm + 4,
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
   headerTitle: {
-    ...Typography.h2,
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.onSurface,
   },
   subHeader: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
-  subHeaderLabel: {
-    ...Typography.label,
+  subLabel: {
+    fontSize: 11,
+    fontWeight: '800',
     color: Colors.onSurfaceDim,
-    marginBottom: Spacing.xs,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
-  subHeaderTitle: {
-    ...Typography.displaySmall,
+  subTitle: {
+    fontSize: 28,
+    fontWeight: '800',
     color: Colors.onSurface,
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -406,17 +375,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   loadingTitle: {
-    ...Typography.h2,
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.onSurface,
-    marginTop: Spacing.xl,
+    marginTop: Spacing.lg,
     textAlign: 'center',
   },
-  loadingText: {
-    ...Typography.body,
+  loadingMsg: {
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.coral,
     marginTop: Spacing.md,
-    fontSize: 15,
-    fontWeight: '600',
     textAlign: 'center',
   },
   loadingDotsRow: {
@@ -430,13 +399,15 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: Colors.coral,
   },
-  scrollView: {
-    flex: 1,
-  },
+
+  // Scroll
+  scrollView: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
   },
+
+  // Card
   card: {
     height: CARD_HEIGHT,
     borderRadius: BorderRadius.lg,
@@ -450,209 +421,205 @@ const styles = StyleSheet.create({
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
-    padding: Spacing.lg,
+    padding: Spacing.md + 4,
     justifyContent: 'space-between',
   },
+
+  // Badges
   badgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
-    alignItems: 'center',
+    gap: 6,
   },
-  cardContent: {
-    marginTop: 'auto',
-  },
-  badge: {
+  badgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
   },
-  badgeEmoji: {
-    fontSize: 16,
-    marginRight: Spacing.xs,
-  },
-  badgeText: {
-    ...Typography.bodySemibold,
+  badgeEmoji: { fontSize: 14 },
+  badgeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
     color: Colors.background,
-    fontSize: 12,
   },
-  budgetStretchBadge: {
-    backgroundColor: '#FF9800',
-    borderRadius: 12,
+  budgetPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 12,
   },
-  budgetStretchText: {
+  budgetPillText: {
     fontSize: 10,
     color: '#fff',
     fontWeight: '700',
   },
-  budgetWorthBadge: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  budgetWorthText: {
-    fontSize: 10,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  visaContainer: {
+
+  // Bottom
+  cardBottom: { marginTop: 'auto' },
+  visaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     alignSelf: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
+    gap: 4,
   },
-  visaEmoji: {
-    fontSize: 16,
-    marginRight: Spacing.xs,
-  },
-  visaText: {
-    ...Typography.body,
-    color: Colors.white,
-    fontSize: 12,
-  },
+  visaEmoji: { fontSize: 14 },
+  visaText: { fontSize: 11, color: Colors.white, fontWeight: '600' },
+
   cityName: {
-    ...Typography.display,
+    fontSize: 48,
+    fontWeight: '800',
     color: Colors.white,
-    marginBottom: Spacing.xs,
+    letterSpacing: -1.5,
+    lineHeight: 52,
   },
   countryName: {
-    ...Typography.bodyLarge,
-    color: Colors.white,
-    opacity: 0.9,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
     marginBottom: Spacing.md,
   },
-  priceContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+
+  // Price
+  priceBox: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
     borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    padding: 12,
+    marginBottom: Spacing.sm,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 6,
+    gap: 8,
   },
   priceLabel: {
-    ...Typography.body,
-    color: Colors.white,
-    marginLeft: Spacing.sm,
     flex: 1,
-  },
-  priceValue: {
-    ...Typography.bodySemibold,
-    color: Colors.white,
-  },
-  flightMiniInfo: {
-    marginLeft: 28,
-    marginBottom: Spacing.sm,
-    marginTop: -4,
-  },
-  flightMiniText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
   },
-  priceTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.3)',
-    paddingTop: Spacing.sm,
-    marginBottom: 0,
-    marginTop: Spacing.xs,
-  },
-  priceTotalLabel: {
-    ...Typography.bodySemibold,
+  priceVal: {
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.white,
-    flex: 1,
   },
-  priceTotalValue: {
-    ...Typography.h2,
+  flightMini: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '500',
+    marginLeft: 22,
+    marginBottom: 6,
+    marginTop: -4,
+  },
+  priceDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginVertical: 4,
+  },
+  totalLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  totalVal: {
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.coral,
   },
-  arrowButton: {
-    alignSelf: 'flex-end',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.coral,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.md,
-  },
-  searchAgainContainer: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xxxl,
-    paddingHorizontal: Spacing.lg,
-  },
-  searchAgainTitle: {
-    ...Typography.h3,
-    color: Colors.onSurfaceDim,
-    marginBottom: Spacing.lg,
-    textAlign: 'center',
-  },
-  searchAgainButton: {
+
+  // CTA
+  ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.coral,
     borderRadius: BorderRadius.pill,
-    borderWidth: 2,
+    paddingVertical: 14,
+  },
+  ctaBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+
+  // Search Again
+  searchAgain: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxxl,
+  },
+  searchAgainTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.onSurfaceDim,
+    marginBottom: Spacing.md,
+  },
+  searchAgainBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.pill,
+    borderWidth: 1.5,
     borderColor: Colors.coral,
   },
   searchAgainText: {
-    ...Typography.bodySemibold,
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.coral,
-    marginLeft: Spacing.sm,
-    fontSize: 16,
   },
+
+  // Error
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xxxl,
+    gap: 8,
   },
   errorTitle: {
-    ...Typography.h3,
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.onSurface,
     textAlign: 'center',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginTop: 8,
   },
   errorSubtitle: {
-    ...Typography.body,
+    fontSize: 14,
     color: Colors.onSurfaceDim,
     textAlign: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
-  retryButton: {
+  retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: Colors.coral,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: BorderRadius.pill,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
   },
-  retryText: {
-    ...Typography.bodySemibold,
+  retryBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.white,
   },
-  backToSearchButton: {
-    paddingVertical: Spacing.sm,
+  changeSearchBtn: {
+    paddingVertical: 8,
   },
-  backToSearchText: {
-    ...Typography.bodySemibold,
+  changeSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.teal,
-    fontSize: 15,
   },
 });
