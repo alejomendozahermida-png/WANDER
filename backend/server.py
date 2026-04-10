@@ -797,6 +797,44 @@ def adjust_dates_for_test(departure: str, return_date: str):
         return new_dep.strftime("%Y-%m-%d"), new_ret.strftime("%Y-%m-%d")
     return departure, return_date
 
+def remap_flight_dates(flight_details: dict, orig_dep: str, orig_ret: str, adj_dep: str, adj_ret: str) -> dict:
+    """Replace adjusted Duffel dates with user's original dates in flight details.
+    Keeps the time portion, only swaps the date portion."""
+    if not flight_details or not DUFFEL_IS_TEST:
+        return flight_details
+
+    from datetime import timedelta
+    orig_dep_dt = datetime.strptime(orig_dep, "%Y-%m-%d")
+    adj_dep_dt = datetime.strptime(adj_dep, "%Y-%m-%d")
+    orig_ret_dt = datetime.strptime(orig_ret, "%Y-%m-%d")
+    adj_ret_dt = datetime.strptime(adj_ret, "%Y-%m-%d")
+
+    def swap_date(iso_str, from_base, to_base):
+        """Replace date portion keeping time"""
+        if not iso_str or len(iso_str) < 10:
+            return iso_str
+        try:
+            dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00").split("+")[0])
+            day_offset = (dt.date() - from_base.date()).days
+            new_date = to_base + timedelta(days=day_offset)
+            return new_date.strftime("%Y-%m-%d") + "T" + dt.strftime("%H:%M:%S")
+        except Exception:
+            return iso_str
+
+    def fix_direction(direction_data, adj_base, orig_base):
+        if not direction_data:
+            return direction_data
+        direction_data["departure"] = swap_date(direction_data.get("departure", ""), adj_base, orig_base)
+        direction_data["arrival"] = swap_date(direction_data.get("arrival", ""), adj_base, orig_base)
+        for seg in (direction_data.get("segments") or []):
+            seg["departureTime"] = swap_date(seg.get("departureTime", ""), adj_base, orig_base)
+            seg["arrivalTime"] = swap_date(seg.get("arrivalTime", ""), adj_base, orig_base)
+        return direction_data
+
+    fix_direction(flight_details.get("outbound"), adj_dep_dt, orig_dep_dt)
+    fix_direction(flight_details.get("inbound"), adj_ret_dt, orig_ret_dt)
+    return flight_details
+
 def format_duration(iso_dur):
     """Convert ISO 8601 duration (PT2H30M) to readable format"""
     if not iso_dur:
@@ -966,6 +1004,10 @@ async def _search_single_flight(client_http, headers, origin, dest_iata, adj_dep
         }
 
         logger.info(f"[Duffel] {origin}->{dest_iata}: {flight_price}EUR, {owner.get('name','?')}")
+
+        # Remap dates from Duffel test dates to user's original dates
+        flight_details = remap_flight_dates(flight_details, orig_dep, orig_ret, adj_dep, adj_ret)
+
         return {
             "iata": dest_iata,
             "city": city_name,

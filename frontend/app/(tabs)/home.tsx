@@ -46,11 +46,14 @@ export default function HomeScreen() {
       if (returnDate && returnDate <= selectedDate) {
         setReturnDate(null);
       }
+      // Auto-switch to return date selection
+      setTimeout(() => {
+        setCalendarMode('return');
+      }, 300);
     } else {
       setReturnDate(selectedDate);
+      setShowCalendar(false);
     }
-    
-    setShowCalendar(false);
   };
 
   const openCalendar = (mode: 'departure' | 'return') => {
@@ -64,21 +67,35 @@ export default function HomeScreen() {
     if (departureDate) {
       const depKey = format(departureDate, 'yyyy-MM-dd');
       marked[depKey] = {
-        selected: calendarMode === 'departure',
-        marked: true,
-        selectedColor: Colors.coral,
-        dotColor: Colors.coral,
+        startingDay: true,
+        color: Colors.coral,
+        textColor: Colors.white,
       };
     }
     
     if (returnDate) {
       const retKey = format(returnDate, 'yyyy-MM-dd');
       marked[retKey] = {
-        selected: calendarMode === 'return',
-        marked: true,
-        selectedColor: Colors.teal,
-        dotColor: Colors.teal,
+        endingDay: true,
+        color: Colors.teal,
+        textColor: Colors.white,
       };
+    }
+    
+    // Fill in-between dates
+    if (departureDate && returnDate) {
+      const start = new Date(departureDate);
+      const end = new Date(returnDate);
+      const current = new Date(start);
+      current.setDate(current.getDate() + 1);
+      while (current < end) {
+        const key = format(current, 'yyyy-MM-dd');
+        marked[key] = {
+          color: 'rgba(216, 90, 48, 0.12)',
+          textColor: Colors.onSurface,
+        };
+        current.setDate(current.getDate() + 1);
+      }
     }
     
     return marked;
@@ -252,7 +269,8 @@ export default function HomeScreen() {
             <Calendar
               onDayPress={handleDateSelect}
               markedDates={getMarkedDates()}
-              minDate={calendarMode === 'departure' ? format(new Date(), 'yyyy-MM-dd') : format(departureDate || new Date(), 'yyyy-MM-dd')}
+              markingType="period"
+              minDate={calendarMode === 'departure' ? format(new Date(), 'yyyy-MM-dd') : (departureDate ? format(new Date(departureDate.getTime() + 86400000), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))}
               theme={{
                 backgroundColor: Colors.surface,
                 calendarBackground: Colors.surface,
@@ -261,7 +279,7 @@ export default function HomeScreen() {
                 selectedDayTextColor: Colors.white,
                 todayTextColor: Colors.coral,
                 dayTextColor: Colors.onSurface,
-                textDisabledColor: Colors.onSurfaceDim,
+                textDisabledColor: Colors.onSurfaceDim + '40',
                 monthTextColor: Colors.onSurface,
                 textMonthFontWeight: '600',
                 textDayFontSize: 16,
