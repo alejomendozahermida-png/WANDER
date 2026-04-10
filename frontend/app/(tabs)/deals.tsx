@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing } from '../../src/constants/theme';
+import { Colors, Typography, Spacing, BorderRadius } from '../../src/constants/theme';
 import { fetchDeals, refreshDeals, Deal } from '../../src/services/dealsService';
 import { useUserStore } from '../../src/store/userStore';
 
