@@ -777,6 +777,209 @@ async def convert_currency(amount: float, from_currency: str = "EUR", to_currenc
         logger.error(f"Currency convert error: {e}")
         return {"error": str(e)}
 
+# ==================== FLIGHT SEARCH (Duffel API via Backend) ====================
+
+DUFFEL_API_KEY = os.environ.get("DUFFEL_API_KEY", "")
+DUFFEL_IS_TEST = DUFFEL_API_KEY.startswith("duffel_test_")
+
+def adjust_dates_for_test(departure: str, return_date: str):
+    """Shift dates forward for Duffel test API key (requires 340+ days in future)"""
+    if not DUFFEL_IS_TEST:
+        return departure, return_date
+    from datetime import timedelta
+    dep = datetime.strptime(departure, "%Y-%m-%d")
+    ret = datetime.strptime(return_date, "%Y-%m-%d")
+    trip_days = (ret - dep).days
+    min_date = datetime.now() + timedelta(days=340)
+    if dep < min_date:
+        new_dep = min_date
+        new_ret = min_date + timedelta(days=max(trip_days, 1))
+        return new_dep.strftime("%Y-%m-%d"), new_ret.strftime("%Y-%m-%d")
+    return departure, return_date
+
+def format_duration(iso_dur):
+    """Convert ISO 8601 duration (PT2H30M) to readable format"""
+    if not iso_dur:
+        return "N/A"
+    import re as _re
+    h = _re.search(r'(\d+)H', iso_dur)
+    m = _re.search(r'(\d+)M', iso_dur)
+    hours = int(h.group(1)) if h else 0
+    minutes = int(m.group(1)) if m else 0
+    if hours > 0 and minutes > 0:
+        return f"{hours}h {minutes}m"
+    if hours > 0:
+        return f"{hours}h"
+    if minutes > 0:
+        return f"{minutes}m"
+    return "N/A"
+
+@api_router.post("/flights/search")
+async def search_flights(data: dict):
+    """
+    Search flights via Duffel API.
+    Expects: { origin, destinations: [iata codes], departure_date, return_date, budget_max }
+    Returns array of flight results with full details.
+    """
+    if not DUFFEL_API_KEY:
+        return {"error": "Duffel API key not configured", "results": []}
+
+    origin = data.get("origin", "CDG")
+    destinations = data.get("destinations", [])
+    departure_date = data.get("departure_date", "")
+    return_date = data.get("return_date", "")
+
+    # Adjust dates for test key
+    adj_dep, adj_ret = adjust_dates_for_test(departure_date, return_date)
+    logger.info(f"[Duffel] Searching flights: {origin} -> {destinations}, dates: {adj_dep} to {adj_ret}")
+
+    results = []
+    headers = {
+        "Authorization": f"Bearer {DUFFEL_API_KEY}",
+        "Content-Type": "application/json",
+        "Duffel-Version": "v2",
+        "Accept": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=50.0) as client_http:
+        tasks = []
+        for dest_iata in destinations[:15]:
+            if dest_iata == origin:
+                continue
+            tasks.append(_search_single_flight(client_http, headers, origin, dest_iata, adj_dep, adj_ret, departure_date, return_date))
+
+        flight_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in flight_results:
+            if isinstance(r, dict) and not r.get("error"):
+                results.append(r)
+
+    results.sort(key=lambda x: x.get("flightPrice", 99999))
+    logger.info(f"[Duffel] Found {len(results)} flight results")
+    return {"results": results}
+
+
+async def _search_single_flight(client_http, headers, origin, dest_iata, adj_dep, adj_ret, orig_dep, orig_ret):
+    """Search a single origin->destination flight pair"""
+    try:
+        payload = {
+            "data": {
+                "slices": [
+                    {"origin": origin, "destination": dest_iata, "departure_date": adj_dep},
+                    {"origin": dest_iata, "destination": origin, "departure_date": adj_ret},
+                ],
+                "passengers": [{"type": "adult"}],
+                "cabin_class": "economy",
+            }
+        }
+
+        resp = await client_http.post(
+            "https://api.duffel.com/air/offer_requests?return_offers=true",
+            json=payload,
+            headers=headers,
+        )
+        resp_data = resp.json()
+
+        if "errors" in resp_data:
+            err_msg = resp_data["errors"][0].get("message", "Unknown Duffel error") if resp_data["errors"] else "Unknown"
+            logger.warning(f"[Duffel] API error for {dest_iata}: {err_msg}")
+            return {"error": err_msg, "iata": dest_iata}
+
+        offers = resp_data.get("data", {}).get("offers", [])
+        if not offers:
+            logger.info(f"[Duffel] No offers for {dest_iata}")
+            return {"error": f"No offers for {dest_iata}"}
+
+        # Get cheapest offer
+        cheapest = min(offers, key=lambda o: float(o.get("total_amount", "99999")))
+        flight_price = round(float(cheapest["total_amount"]))
+
+        # Extract city/country info from slice destination
+        outbound_slice = cheapest.get("slices", [{}])[0]
+        inbound_slice = cheapest["slices"][1] if len(cheapest.get("slices", [])) > 1 else None
+
+        dest_place = outbound_slice.get("destination") or {}
+        city_name = dest_place.get("city_name") or dest_place.get("name") or dest_iata
+        country_code = dest_place.get("iata_country_code", "")
+
+        COUNTRY_NAMES = {
+            "PT": "Portugal", "ES": "Spain", "FR": "France", "IT": "Italy",
+            "GR": "Greece", "CZ": "Czech Republic", "HU": "Hungary", "PL": "Poland",
+            "AT": "Austria", "DE": "Germany", "NL": "Netherlands", "BE": "Belgium",
+            "GB": "United Kingdom", "IE": "Ireland", "HR": "Croatia", "RO": "Romania",
+            "BG": "Bulgaria", "CH": "Switzerland", "SE": "Sweden", "NO": "Norway",
+            "DK": "Denmark", "FI": "Finland", "TR": "Turkey", "MA": "Morocco",
+            "TN": "Tunisia", "EG": "Egypt", "IL": "Israel", "JO": "Jordan",
+        }
+        country_name = COUNTRY_NAMES.get(country_code, country_code)
+        visa_free = country_code in ["PT","ES","FR","IT","GR","CZ","HU","PL","AT","DE","NL","BE","GB","IE","HR","RO","BG","CH","SE","NO","DK","FI"]
+
+        def extract_segments(slice_data):
+            if not slice_data:
+                return []
+            segs = []
+            for seg in (slice_data.get("segments") or []):
+                origin_data = seg.get("origin") or {}
+                dest_data = seg.get("destination") or {}
+                op_carrier = seg.get("operating_carrier") or {}
+                mk_carrier = seg.get("marketing_carrier") or {}
+                segs.append({
+                    "airline": op_carrier.get("name") or mk_carrier.get("name", "Unknown"),
+                    "flightNumber": (mk_carrier.get("iata_code", "") + seg.get("marketing_carrier_flight_number", "")),
+                    "departureAirport": origin_data.get("iata_code", ""),
+                    "departureName": origin_data.get("city_name") or origin_data.get("name", ""),
+                    "departureTime": seg.get("departing_at", ""),
+                    "arrivalAirport": dest_data.get("iata_code", ""),
+                    "arrivalName": dest_data.get("city_name") or dest_data.get("name", ""),
+                    "arrivalTime": seg.get("arriving_at", ""),
+                    "duration": format_duration(seg.get("duration", "")),
+                    "aircraft": (seg.get("aircraft") or {}).get("name", ""),
+                })
+            return segs
+
+        ob_segments = outbound_slice.get("segments") or []
+        ib_segments = (inbound_slice.get("segments") or []) if inbound_slice else []
+
+        owner = cheapest.get("owner") or {}
+        flight_details = {
+            "offerId": cheapest.get("id", ""),
+            "airline": owner.get("name", "Unknown"),
+            "totalPrice": flight_price,
+            "currency": cheapest.get("total_currency", "EUR"),
+            "outbound": {
+                "departure": ob_segments[0].get("departing_at", "") if ob_segments else "",
+                "arrival": ob_segments[-1].get("arriving_at", "") if ob_segments else "",
+                "duration": format_duration(outbound_slice.get("duration", "")),
+                "stops": max(0, len(ob_segments) - 1),
+                "segments": extract_segments(outbound_slice),
+            },
+            "inbound": {
+                "departure": ib_segments[0].get("departing_at", "") if ib_segments else "",
+                "arrival": ib_segments[-1].get("arriving_at", "") if ib_segments else "",
+                "duration": format_duration(inbound_slice.get("duration", "")) if inbound_slice else "N/A",
+                "stops": max(0, len(ib_segments) - 1),
+                "segments": extract_segments(inbound_slice),
+            },
+        }
+
+        logger.info(f"[Duffel] {origin}->{dest_iata}: {flight_price}EUR, {owner.get('name','?')}")
+        return {
+            "iata": dest_iata,
+            "city": city_name,
+            "country": country_name,
+            "flightPrice": flight_price,
+            "flightDuration": format_duration(outbound_slice.get("duration", "")),
+            "flightDetails": flight_details,
+            "visaFree": visa_free,
+            "departureDate": orig_dep,
+            "returnDate": orig_ret,
+        }
+
+    except Exception as e:
+        import traceback
+        logger.warning(f"[Duffel] Error searching {dest_iata}: {e}\n{traceback.format_exc()}")
+        return {"error": str(e), "iata": dest_iata}
+
+
 # ==================== AI ENDPOINTS (Claude via Emergent LLM) ====================
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
