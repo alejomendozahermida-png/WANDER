@@ -315,7 +315,7 @@ export default function DetailScreen() {
         </View>
 
         {/* Flight Details - Expandable */}
-        {destination.flightDetails && (
+        {destination.flightDetails ? (
           <Card style={styles.summaryCard}>
             <Text style={styles.cardTitle}>Detalles del vuelo</Text>
             <Text style={styles.flightAirlineMain}>
@@ -459,6 +459,32 @@ export default function DetailScreen() {
                 ))}
               </View>
             )}
+          </Card>
+        ) : (
+          <Card style={styles.summaryCard}>
+            <Text style={styles.cardTitle}>Informacion del vuelo</Text>
+            <View style={styles.estimatedFlightCard}>
+              <Ionicons name="airplane" size={24} color={Colors.coral} />
+              <View style={styles.estimatedFlightInfo}>
+                <Text style={styles.estimatedFlightRoute}>
+                  {user?.homeAirportIata || 'CDG'} → {destination.iata}
+                </Text>
+                <Text style={styles.estimatedFlightPrice}>
+                  {destination.flightPrice}€ (precio estimado ida y vuelta)
+                </Text>
+                {destination.flightDuration && destination.flightDuration !== 'N/A' && (
+                  <Text style={styles.estimatedFlightDuration}>
+                    Duracion aprox: {destination.flightDuration}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <View style={styles.estimatedFlightNote}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.onSurfaceDim} />
+              <Text style={styles.estimatedFlightNoteText}>
+                Los precios son estimaciones. Se confirmaran al momento de reservar.
+              </Text>
+            </View>
           </Card>
         )}
 
@@ -1475,5 +1501,45 @@ const styles = StyleSheet.create({
   itinerarySubtitle: {
     fontSize: 13,
     color: Colors.onSurfaceDim,
+  },
+  // Estimated flight (when no Duffel details)
+  estimatedFlightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 77, 77, 0.06)',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  estimatedFlightInfo: {
+    flex: 1,
+  },
+  estimatedFlightRoute: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  estimatedFlightPrice: {
+    fontSize: 14,
+    color: Colors.coral,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  estimatedFlightDuration: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
+  },
+  estimatedFlightNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  estimatedFlightNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+    lineHeight: 17,
   },
 });
