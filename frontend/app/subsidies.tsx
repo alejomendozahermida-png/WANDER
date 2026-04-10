@@ -5,15 +5,17 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius, Typography } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchSubsidies, Subsidy, SubsidyResult } from '../src/services/subsidyService';
+import { fetchSubsidies, SubsidyResult } from '../src/services/subsidyService';
 import { useUserStore } from '../src/store/userStore';
+
+const { width } = Dimensions.get('window');
 
 export default function SubsidiesScreen() {
   const router = useRouter();
@@ -21,6 +23,7 @@ export default function SubsidiesScreen() {
   const { user } = useUserStore();
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<SubsidyResult | null>(null);
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const userBudget = params.budget ? parseFloat(params.budget) : (user?.budgetMax || 500);
 
   useEffect(() => {
@@ -44,7 +47,11 @@ export default function SubsidiesScreen() {
     }
   };
 
-  const realBudget = userBudget + (result?.total_potential_savings || 0);
+  const totalSavings = result?.total_potential_savings || 0;
+  const realBudget = userBudget + totalSavings;
+
+  const applicableSubsidies = result?.subsidies.filter(s => s.applies) || [];
+  const otherSubsidies = result?.subsidies.filter(s => !s.applies) || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -53,14 +60,14 @@ export default function SubsidiesScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.onSurface} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ayudas Europeas</Text>
+        <Text style={styles.headerTitle}>Ayudas para viajar</Text>
         <View style={styles.backButton} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.teal} />
-          <Text style={styles.loadingText}>Calculando ayudas disponibles...</Text>
+          <Text style={styles.loadingText}>Buscando ayudas...</Text>
         </View>
       ) : (
         <ScrollView
@@ -68,118 +75,109 @@ export default function SubsidiesScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Budget Calculator Card */}
+          {/* Budget Calculator - Vertical layout */}
           <View style={styles.budgetCard}>
-            <Text style={styles.budgetTitle}>Tu presupuesto real</Text>
-            <View style={styles.budgetRow}>
-              <View style={styles.budgetItem}>
-                <Text style={styles.budgetLabel}>Tu presupuesto</Text>
-                <Text style={styles.budgetValue}>{Math.round(userBudget)}\u20AC</Text>
+            <View style={styles.budgetTop}>
+              <View style={styles.budgetBox}>
+                <Text style={styles.budgetSmallLabel}>Tu presupuesto</Text>
+                <Text style={styles.budgetSmallValue}>{Math.round(userBudget)}{'\u20AC'}</Text>
               </View>
-              <View style={styles.budgetPlus}>
-                <Text style={styles.budgetPlusText}>+</Text>
+              <View style={styles.budgetPlusIcon}>
+                <Ionicons name="add-circle" size={24} color={Colors.teal} />
               </View>
-              <View style={styles.budgetItem}>
-                <Text style={styles.budgetLabel}>Ayudas</Text>
-                <Text style={[styles.budgetValue, { color: Colors.teal }]}>
-                  {result?.total_potential_savings || 0}\u20AC
-                </Text>
+              <View style={styles.budgetBox}>
+                <Text style={styles.budgetSmallLabel}>Ayudas</Text>
+                <Text style={[styles.budgetSmallValue, { color: Colors.teal }]}>+{totalSavings}{'\u20AC'}</Text>
               </View>
-              <View style={styles.budgetEquals}>
-                <Text style={styles.budgetPlusText}>=</Text>
-              </View>
-              <View style={styles.budgetItem}>
-                <Text style={styles.budgetLabel}>Total real</Text>
-                <Text style={[styles.budgetValue, { color: Colors.coral }]}>
-                  {Math.round(realBudget)}\u20AC
-                </Text>
-              </View>
+            </View>
+            <View style={styles.budgetDivider} />
+            <View style={styles.budgetBottom}>
+              <Text style={styles.budgetTotalLabel}>Poder real de tu presupuesto</Text>
+              <Text style={styles.budgetTotalValue}>{Math.round(realBudget)}{'\u20AC'}</Text>
             </View>
           </View>
 
-          {/* Info Banner */}
-          <View style={styles.infoBanner}>
-            <Ionicons name="information-circle" size={20} color={Colors.teal} />
-            <Text style={styles.infoText}>
-              Estas ayudas son para jovenes europeos (18-30). Las condiciones pueden variar.
-            </Text>
-          </View>
-
-          {/* Subsidies List */}
-          <Text style={styles.sectionTitle}>
-            {result?.applicable_count || 0} ayudas disponibles para ti
-          </Text>
-
-          {result?.subsidies.map((subsidy, index) => (
-            <View
-              key={index}
-              style={[
-                styles.subsidyCard,
-                !subsidy.applies && styles.subsidyCardInactive,
-              ]}
-            >
-              <View style={styles.subsidyHeader}>
-                <View style={styles.subsidyNameRow}>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: subsidy.applies ? Colors.teal : Colors.onSurfaceDim }
-                  ]} />
-                  <Text style={[
-                    styles.subsidyName,
-                    !subsidy.applies && styles.subsidyNameInactive
-                  ]}>
-                    {subsidy.name}
-                  </Text>
-                </View>
-                {subsidy.applies && (
-                  <View style={styles.applicableBadge}>
-                    <Text style={styles.applicableText}>Elegible</Text>
-                  </View>
-                )}
-              </View>
-
-              <Text style={[
-                styles.subsidyDescription,
-                !subsidy.applies && styles.subsidyDescInactive
-              ]}>
-                {subsidy.description}
+          {/* Eligible subsidies */}
+          {applicableSubsidies.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>
+                Puedes acceder a estas ayudas
               </Text>
 
-              <View style={styles.subsidyFooter}>
-                <View style={styles.subsidyAmountContainer}>
-                  <Text style={styles.subsidyAmountLabel}>Monto:</Text>
-                  <Text style={[
-                    styles.subsidyAmount,
-                    !subsidy.applies && { color: Colors.onSurfaceDim }
-                  ]}>
-                    {subsidy.amount}
+              {applicableSubsidies.map((subsidy, index) => {
+                const isExpanded = expandedCard === index;
+                return (
+                  <TouchableOpacity
+                    key={`applicable-${index}`}
+                    style={styles.subsidyCard}
+                    activeOpacity={0.8}
+                    onPress={() => setExpandedCard(isExpanded ? null : index)}
+                  >
+                    <View style={styles.cardTop}>
+                      <Text style={styles.cardEmoji}>{(subsidy as any).emoji || '\uD83D\uDCB6'}</Text>
+                      <View style={styles.cardMainInfo}>
+                        <Text style={styles.cardName}>{subsidy.name}</Text>
+                        <Text style={styles.cardAmount}>{subsidy.amount}</Text>
+                      </View>
+                      <View style={styles.eligiblePill}>
+                        <Ionicons name="checkmark" size={12} color={Colors.teal} />
+                      </View>
+                    </View>
+
+                    <Text style={styles.cardDescription}>{subsidy.description}</Text>
+
+                    {isExpanded && (subsidy as any).how_to ? (
+                      <View style={styles.howToBox}>
+                        <Text style={styles.howToLabel}>Como conseguirlo:</Text>
+                        <Text style={styles.howToText}>{(subsidy as any).how_to}</Text>
+                        <View style={styles.deadlineRow}>
+                          <Ionicons name="time-outline" size={14} color={Colors.onSurfaceDim} />
+                          <Text style={styles.deadlineText}>{subsidy.next_deadline}</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.tapHint}>Toca para ver como aplicar</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+
+          {/* Other subsidies */}
+          {otherSubsidies.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>
+                Otras ayudas europeas
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                No aplican a tu perfil actual, pero podrian en el futuro
+              </Text>
+
+              {otherSubsidies.map((subsidy, index) => (
+                <View key={`other-${index}`} style={styles.subsidyCardInactive}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.cardEmoji}>{(subsidy as any).emoji || '\uD83D\uDCB6'}</Text>
+                    <View style={styles.cardMainInfo}>
+                      <Text style={[styles.cardName, { color: Colors.onSurfaceDim }]}>{subsidy.name}</Text>
+                      <Text style={[styles.cardAmount, { color: Colors.onSurfaceDim }]}>{subsidy.amount}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.cardDescription, { color: Colors.onSurfaceDim, opacity: 0.7 }]}>
+                    {subsidy.description}
                   </Text>
                 </View>
+              ))}
+            </>
+          )}
 
-                <View style={styles.subsidyDeadlineContainer}>
-                  <Ionicons name="calendar-outline" size={14} color={Colors.onSurfaceDim} />
-                  <Text style={styles.subsidyDeadline}>{subsidy.next_deadline}</Text>
-                </View>
-              </View>
-
-              {subsidy.applies && (
-                <TouchableOpacity
-                  style={styles.applyButton}
-                  onPress={() => {
-                    Alert.alert(
-                      subsidy.name,
-                      `Para aplicar a ${subsidy.name}:\n\n${subsidy.description}\n\nMonto: ${subsidy.amount}\nDeadline: ${subsidy.next_deadline}\n\nBusca "${subsidy.name}" en tu navegador para mas informacion.`,
-                      [{ text: 'Entendido', style: 'default' }]
-                    );
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="information-circle" size={16} color={Colors.background} />
-                  <Text style={styles.applyButtonText}>Mas informacion</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
+          {/* Info note */}
+          <View style={styles.infoNote}>
+            <Ionicons name="information-circle-outline" size={18} color={Colors.onSurfaceDim} />
+            <Text style={styles.infoNoteText}>
+              Las ayudas son para jovenes europeos de 18-30 anos. Montos y condiciones pueden variar.
+            </Text>
+          </View>
 
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -201,14 +199,15 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     ...Typography.h2,
     color: Colors.onSurface,
+    fontSize: 18,
   },
   loadingContainer: {
     flex: 1,
@@ -227,172 +226,170 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
   },
+  // Budget Calculator
   budgetCard: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.surfaceMid,
   },
-  budgetTitle: {
-    ...Typography.h3,
-    color: Colors.onSurface,
-    marginBottom: Spacing.md,
-    textAlign: 'center',
-  },
-  budgetRow: {
+  budgetTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  budgetItem: {
-    alignItems: 'center',
+  budgetBox: {
     flex: 1,
+    alignItems: 'center',
   },
-  budgetLabel: {
-    fontSize: 11,
+  budgetPlusIcon: {
+    paddingHorizontal: Spacing.md,
+  },
+  budgetSmallLabel: {
+    fontSize: 12,
     color: Colors.onSurfaceDim,
     marginBottom: 4,
   },
-  budgetValue: {
-    fontSize: 22,
+  budgetSmallValue: {
+    fontSize: 20,
     fontWeight: '800',
     color: Colors.onSurface,
   },
-  budgetPlus: {
-    width: 24,
+  budgetDivider: {
+    height: 1,
+    backgroundColor: Colors.surfaceMid,
+    marginVertical: Spacing.md,
+  },
+  budgetBottom: {
     alignItems: 'center',
   },
-  budgetEquals: {
-    width: 24,
-    alignItems: 'center',
-  },
-  budgetPlusText: {
-    fontSize: 20,
-    fontWeight: '300',
-    color: Colors.onSurfaceDim,
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(96, 218, 196, 0.08)',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  infoText: {
-    flex: 1,
+  budgetTotalLabel: {
     fontSize: 13,
     color: Colors.onSurfaceDim,
-    lineHeight: 18,
+    marginBottom: 6,
   },
+  budgetTotalValue: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.coral,
+  },
+  // Section titles
   sectionTitle: {
     ...Typography.h3,
     color: Colors.onSurface,
+    marginBottom: Spacing.xs,
+    fontSize: 17,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceDim,
     marginBottom: Spacing.md,
   },
+  // Subsidy cards
   subsidyCard: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 3,
     borderLeftColor: Colors.teal,
   },
   subsidyCardInactive: {
-    borderLeftColor: Colors.surfaceMid,
-    opacity: 0.6,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    opacity: 0.55,
   },
-  subsidyHeader: {
+  cardTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  subsidyNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cardEmoji: {
+    fontSize: 24,
+    marginRight: Spacing.sm + 2,
+  },
+  cardMainInfo: {
     flex: 1,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: Spacing.sm,
-  },
-  subsidyName: {
+  cardName: {
     ...Typography.bodySemibold,
     color: Colors.onSurface,
-    flex: 1,
+    fontSize: 15,
   },
-  subsidyNameInactive: {
-    color: Colors.onSurfaceDim,
-  },
-  applicableBadge: {
-    backgroundColor: 'rgba(96, 218, 196, 0.15)',
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.pill,
-  },
-  applicableText: {
-    fontSize: 11,
+  cardAmount: {
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.teal,
+    marginTop: 2,
   },
-  subsidyDescription: {
-    ...Typography.body,
-    color: Colors.onSurfaceDim,
-    fontSize: 14,
-    marginBottom: Spacing.md,
-    lineHeight: 20,
-  },
-  subsidyDescInactive: {
-    color: Colors.onSurfaceDim,
-  },
-  subsidyFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  subsidyAmountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  subsidyAmountLabel: {
-    fontSize: 12,
-    color: Colors.onSurfaceDim,
-  },
-  subsidyAmount: {
-    ...Typography.bodySemibold,
-    fontSize: 14,
-    color: Colors.teal,
-  },
-  subsidyDeadlineContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  subsidyDeadline: {
-    fontSize: 12,
-    color: Colors.onSurfaceDim,
-  },
-  applyButton: {
-    flexDirection: 'row',
+  eligiblePill: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(96, 218, 196, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.teal,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm + 2,
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginLeft: Spacing.sm,
   },
-  applyButtonText: {
-    ...Typography.bodySemibold,
-    color: Colors.background,
+  cardDescription: {
     fontSize: 14,
+    color: Colors.onSurfaceDim,
+    lineHeight: 20,
+    marginBottom: Spacing.sm,
+  },
+  tapHint: {
+    fontSize: 12,
+    color: Colors.teal,
+    fontWeight: '600',
+    opacity: 0.8,
+  },
+  // How To section (expanded)
+  howToBox: {
+    backgroundColor: 'rgba(96, 218, 196, 0.06)',
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  howToLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.teal,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  howToText: {
+    fontSize: 14,
+    color: Colors.onSurface,
+    lineHeight: 21,
+    marginBottom: Spacing.sm,
+  },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  deadlineText: {
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+  },
+  // Info note
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.sm,
+  },
+  infoNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.onSurfaceDim,
+    lineHeight: 17,
   },
 });

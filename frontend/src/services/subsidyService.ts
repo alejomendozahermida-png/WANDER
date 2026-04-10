@@ -18,10 +18,11 @@ const apiClient = axios.create({
 
 export interface Subsidy {
   name: string;
+  emoji: string;
   description: string;
   amount: string;
   applies: boolean;
-  apply_url: string;
+  how_to: string;
   next_deadline: string;
 }
 
