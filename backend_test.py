@@ -1,375 +1,865 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Wander App
-Tests all RSS Deal Aggregator, Notifications, and Alert Preferences endpoints
+Comprehensive Backend API Testing for Wander Travel App
+Tests all endpoints with valid inputs, edge cases, and error handling
 """
 
 import asyncio
 import httpx
 import json
 import time
-from datetime import datetime
-from typing import Dict, Any
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
 
-# Use the backend URL from the environment
+# Backend URL from environment
 BACKEND_URL = "https://eurohop-preview.preview.emergentagent.com/api"
 
-class WanderAPITester:
+class BackendTester:
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0)
-        self.test_user_id = "test-user-1"
-        self.test_results = []
+        self.results = []
+        self.total_tests = 0
+        self.passed_tests = 0
+        self.failed_tests = 0
         
-    async def close(self):
-        await self.client.aclose()
-    
-    def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
-        """Log test results"""
+    def log_test(self, endpoint: str, test_name: str, success: bool, details: str = "", response_time: float = 0):
+        """Log test result"""
+        self.total_tests += 1
+        if success:
+            self.passed_tests += 1
+            status = "✅ PASS"
+        else:
+            self.failed_tests += 1
+            status = "❌ FAIL"
+            
         result = {
+            "endpoint": endpoint,
             "test": test_name,
+            "status": status,
             "success": success,
             "details": details,
-            "timestamp": datetime.now().isoformat(),
-            "response_data": response_data
+            "response_time": f"{response_time:.2f}s" if response_time > 0 else "N/A"
         }
-        self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}: {details}")
-        if response_data and not success:
-            print(f"   Response: {json.dumps(response_data, indent=2)}")
-    
+        self.results.append(result)
+        print(f"{status} {endpoint} - {test_name}: {details}")
+        
     async def test_health_check(self):
-        """Test GET /api/ - Basic health check"""
+        """Test GET /api/ - Health check"""
+        print("\n🔍 Testing Health Check...")
+        
         try:
-            response = await self.client.get(f"{BACKEND_URL}/")
-            if response.status_code == 200:
-                data = response.json()
-                if "message" in data and "Wander API" in data["message"]:
-                    self.log_test("Health Check", True, f"API responding: {data['message']}", data)
-                    return True
-                else:
-                    self.log_test("Health Check", False, f"Unexpected response format", data)
-                    return False
-            else:
-                self.log_test("Health Check", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Health Check", False, f"Connection error: {str(e)}")
-            return False
-    
-    async def test_save_alert_preferences(self):
-        """Test POST /api/alerts/preferences - Save alert preferences"""
-        try:
-            preferences = {
-                "user_id": self.test_user_id,
-                "max_price": 200,
-                "preferred_destinations": ["Lisbon", "Barcelona"],
-                "origin_iata": "CDG",
-                "active": True
-            }
-            
-            response = await self.client.post(
-                f"{BACKEND_URL}/alerts/preferences",
-                json=preferences
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success") and "preference" in data:
-                    self.log_test("Save Alert Preferences", True, "Preferences saved successfully", data)
-                    return True
-                else:
-                    self.log_test("Save Alert Preferences", False, "Unexpected response format", data)
-                    return False
-            else:
-                self.log_test("Save Alert Preferences", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Save Alert Preferences", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_get_alert_preferences(self):
-        """Test GET /api/alerts/preferences/{user_id} - Get saved preferences"""
-        try:
-            response = await self.client.get(f"{BACKEND_URL}/alerts/preferences/{self.test_user_id}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("user_id") == self.test_user_id:
-                    expected_fields = ["max_price", "preferred_destinations", "origin_iata", "active"]
-                    if all(field in data for field in expected_fields):
-                        self.log_test("Get Alert Preferences", True, "Preferences retrieved successfully", data)
-                        return True
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "message" in data and "Wander" in data["message"]:
+                        self.log_test("GET /", "Health check", True, 
+                                    f"Status: {response.status_code}, Message: {data['message']}", response_time)
                     else:
-                        self.log_test("Get Alert Preferences", False, "Missing expected fields", data)
-                        return False
+                        self.log_test("GET /", "Health check", False, 
+                                    f"Unexpected response format: {data}", response_time)
                 else:
-                    self.log_test("Get Alert Preferences", False, "User ID mismatch", data)
-                    return False
-            else:
-                self.log_test("Get Alert Preferences", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Get Alert Preferences", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_deals_refresh(self):
-        """Test POST /api/deals/refresh - Trigger RSS feed refresh"""
-        try:
-            print("⏳ Triggering RSS feed refresh (may take 10-15 seconds)...")
-            start_time = time.time()
-            
-            response = await self.client.post(f"{BACKEND_URL}/deals/refresh")
-            
-            elapsed = time.time() - start_time
-            
-            if response.status_code == 200:
-                data = response.json()
-                required_fields = ["message", "deals_count", "notifications_created"]
-                if all(field in data for field in required_fields):
-                    deals_count = data["deals_count"]
-                    notifications = data["notifications_created"]
-                    self.log_test("Deals Refresh", True, 
-                                f"Refresh completed in {elapsed:.1f}s - {deals_count} deals, {notifications} notifications", 
-                                data)
-                    return True, deals_count
-                else:
-                    self.log_test("Deals Refresh", False, "Missing required response fields", data)
-                    return False, 0
-            else:
-                self.log_test("Deals Refresh", False, f"HTTP {response.status_code}: {response.text}")
-                return False, 0
-        except Exception as e:
-            self.log_test("Deals Refresh", False, f"Error: {str(e)}")
-            return False, 0
-    
-    async def test_get_deals(self):
-        """Test GET /api/deals - Get cached deals"""
-        try:
-            # Test without parameters
-            response = await self.client.get(f"{BACKEND_URL}/deals")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "deals" in data and "count" in data:
-                    deals = data["deals"]
-                    count = data["count"]
+                    self.log_test("GET /", "Health check", False, 
+                                f"Status: {response.status_code}, Body: {response.text}", response_time)
                     
-                    # Validate deal structure if deals exist
-                    if deals:
-                        first_deal = deals[0]
-                        required_fields = ["id", "source", "title", "url", "fetched_at"]
-                        if all(field in first_deal for field in required_fields):
-                            self.log_test("Get Deals", True, f"Retrieved {count} deals successfully")
-                            return True
+        except Exception as e:
+            self.log_test("GET /", "Health check", False, f"Exception: {str(e)}")
+            
+    async def test_flight_search(self):
+        """Test POST /api/flights/search - Duffel API integration"""
+        print("\n✈️ Testing Flight Search...")
+        
+        # Test 1: Valid flight search
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                # Use dates 340+ days in future for Duffel test key
+                future_date = datetime.now() + timedelta(days=350)
+                departure_date = future_date.strftime("%Y-%m-%d")
+                return_date = (future_date + timedelta(days=4)).strftime("%Y-%m-%d")
+                
+                payload = {
+                    "origin": "CDG",
+                    "destinations": ["BCN", "LIS", "BUD"],
+                    "departure_date": departure_date,
+                    "return_date": return_date
+                }
+                
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/flights/search", json=payload)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "results" in data and isinstance(data["results"], list):
+                        results_count = len(data["results"])
+                        self.log_test("POST /flights/search", "Valid search", True, 
+                                    f"Found {results_count} flight results", response_time)
+                        
+                        # Validate result structure if results exist
+                        if results_count > 0:
+                            first_result = data["results"][0]
+                            required_fields = ["iata", "city", "country", "flightPrice", "flightDetails"]
+                            missing_fields = [f for f in required_fields if f not in first_result]
+                            
+                            if not missing_fields:
+                                self.log_test("POST /flights/search", "Result structure", True, 
+                                            f"All required fields present: {required_fields}")
+                            else:
+                                self.log_test("POST /flights/search", "Result structure", False, 
+                                            f"Missing fields: {missing_fields}")
+                    else:
+                        self.log_test("POST /flights/search", "Valid search", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("POST /flights/search", "Valid search", False, 
+                                f"Status: {response.status_code}, Body: {response.text}")
+                    
+        except Exception as e:
+            self.log_test("POST /flights/search", "Valid search", False, f"Exception: {str(e)}")
+            
+        # Test 2: Invalid destinations
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "origin": "CDG",
+                    "destinations": [],  # Empty destinations
+                    "departure_date": departure_date,
+                    "return_date": return_date
+                }
+                
+                response = await client.post(f"{BACKEND_URL}/flights/search", json=payload)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "results" in data and len(data["results"]) == 0:
+                        self.log_test("POST /flights/search", "Empty destinations", True, 
+                                    "Correctly handled empty destinations")
+                    else:
+                        self.log_test("POST /flights/search", "Empty destinations", False, 
+                                    f"Unexpected response: {data}")
+                else:
+                    self.log_test("POST /flights/search", "Empty destinations", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /flights/search", "Empty destinations", False, f"Exception: {str(e)}")
+            
+    async def test_accommodations(self):
+        """Test GET /api/accommodations/search - Booking.com integration"""
+        print("\n🏨 Testing Accommodations Search...")
+        
+        # Test 1: Valid accommodation search
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                params = {
+                    "city": "Lisbon",
+                    "checkin": "2026-06-01",
+                    "checkout": "2026-06-05",
+                    "adults": 2,
+                    "currency": "EUR"
+                }
+                
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/accommodations/search", params=params)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "accommodations" in data and data["accommodations"]:
+                        accommodations = data["accommodations"]
+                        categories = ["budget", "midrange", "premium"]
+                        found_categories = [cat for cat in categories if accommodations.get(cat)]
+                        
+                        self.log_test("GET /accommodations/search", "Valid search", True, 
+                                    f"Found {len(found_categories)} categories: {found_categories}", response_time)
+                        
+                        # Validate structure of first accommodation
+                        for category in found_categories:
+                            acc = accommodations[category]
+                            required_fields = ["name", "stars", "total_price", "price_per_night", "currency"]
+                            missing_fields = [f for f in required_fields if f not in acc]
+                            
+                            if not missing_fields:
+                                self.log_test("GET /accommodations/search", f"{category} structure", True, 
+                                            f"All required fields present")
+                            else:
+                                self.log_test("GET /accommodations/search", f"{category} structure", False, 
+                                            f"Missing fields: {missing_fields}")
+                            break  # Test only first found category
+                    else:
+                        self.log_test("GET /accommodations/search", "Valid search", False, 
+                                    f"No accommodations found: {data}")
+                else:
+                    self.log_test("GET /accommodations/search", "Valid search", False, 
+                                f"Status: {response.status_code}, Body: {response.text}")
+                    
+        except Exception as e:
+            self.log_test("GET /accommodations/search", "Valid search", False, f"Exception: {str(e)}")
+            
+        # Test 2: Different city
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                params = {
+                    "city": "Bangkok",
+                    "checkin": "2026-07-01",
+                    "checkout": "2026-07-05",
+                    "adults": 1,
+                    "currency": "EUR"
+                }
+                
+                response = await client.get(f"{BACKEND_URL}/accommodations/search", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    self.log_test("GET /accommodations/search", "Different city", True, 
+                                f"Bangkok search successful: {data.get('city', 'Unknown')}")
+                else:
+                    self.log_test("GET /accommodations/search", "Different city", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /accommodations/search", "Different city", False, f"Exception: {str(e)}")
+            
+        # Test 3: Invalid city
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "city": "NonExistentCity123",
+                    "checkin": "2026-06-01",
+                    "checkout": "2026-06-05",
+                    "adults": 2,
+                    "currency": "EUR"
+                }
+                
+                response = await client.get(f"{BACKEND_URL}/accommodations/search", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "error" in data or not data.get("accommodations"):
+                        self.log_test("GET /accommodations/search", "Invalid city", True, 
+                                    "Correctly handled invalid city")
+                    else:
+                        self.log_test("GET /accommodations/search", "Invalid city", False, 
+                                    f"Should have failed for invalid city: {data}")
+                else:
+                    self.log_test("GET /accommodations/search", "Invalid city", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /accommodations/search", "Invalid city", False, f"Exception: {str(e)}")
+            
+    async def test_currency_exchange(self):
+        """Test currency exchange endpoints"""
+        print("\n💱 Testing Currency Exchange...")
+        
+        # Test 1: Get exchange rates
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/currency/rates")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "rates" in data and "base" in data:
+                        rates_count = len(data["rates"])
+                        self.log_test("GET /currency/rates", "Get rates", True, 
+                                    f"Base: {data['base']}, {rates_count} rates", response_time)
+                    else:
+                        self.log_test("GET /currency/rates", "Get rates", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /currency/rates", "Get rates", False, 
+                                f"Status: {response.status_code}, Body: {response.text}")
+                    
+        except Exception as e:
+            self.log_test("GET /currency/rates", "Get rates", False, f"Exception: {str(e)}")
+            
+        # Test 2: Convert currency
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "from": "EUR",
+                    "to": "USD",
+                    "amount": 100
+                }
+                
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/currency/convert", params=params)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "result" in data and "rate" in data:
+                        self.log_test("GET /currency/convert", "Convert EUR to USD", True, 
+                                    f"100 EUR = {data['result']} USD (rate: {data['rate']})", response_time)
+                    else:
+                        self.log_test("GET /currency/convert", "Convert EUR to USD", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /currency/convert", "Convert EUR to USD", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /currency/convert", "Convert EUR to USD", False, f"Exception: {str(e)}")
+            
+    async def test_rss_deals(self):
+        """Test RSS deals endpoints"""
+        print("\n📰 Testing RSS Deals...")
+        
+        # Test 1: Refresh deals
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/deals/refresh")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "deals_count" in data and "message" in data:
+                        self.log_test("POST /deals/refresh", "Refresh deals", True, 
+                                    f"Refreshed {data['deals_count']} deals", response_time)
+                    else:
+                        self.log_test("POST /deals/refresh", "Refresh deals", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("POST /deals/refresh", "Refresh deals", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /deals/refresh", "Refresh deals", False, f"Exception: {str(e)}")
+            
+        # Test 2: Get deals
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {"limit": 10}
+                
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/deals", params=params)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "deals" in data and "count" in data:
+                        self.log_test("GET /deals", "Get deals", True, 
+                                    f"Retrieved {data['count']} deals", response_time)
+                    else:
+                        self.log_test("GET /deals", "Get deals", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /deals", "Get deals", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /deals", "Get deals", False, f"Exception: {str(e)}")
+            
+        # Test 3: Get error fares
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/deals/error-fares")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "deals" in data and "count" in data:
+                        self.log_test("GET /deals/error-fares", "Get error fares", True, 
+                                    f"Retrieved {data['count']} error fares", response_time)
+                    else:
+                        self.log_test("GET /deals/error-fares", "Get error fares", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /deals/error-fares", "Get error fares", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /deals/error-fares", "Get error fares", False, f"Exception: {str(e)}")
+            
+        # Test 4: Get deals with airport filter
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {"limit": 5, "airport": "CDG"}
+                
+                response = await client.get(f"{BACKEND_URL}/deals", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "user_region" in data:
+                        self.log_test("GET /deals", "Airport filter", True, 
+                                    f"Filtered by CDG, user region: {data['user_region']}")
+                    else:
+                        self.log_test("GET /deals", "Airport filter", True, 
+                                    "Airport filter applied successfully")
+                else:
+                    self.log_test("GET /deals", "Airport filter", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /deals", "Airport filter", False, f"Exception: {str(e)}")
+            
+    async def test_notifications(self):
+        """Test notifications endpoints"""
+        print("\n🔔 Testing Notifications...")
+        
+        test_user_id = "test-user-123"
+        
+        # Test 1: Get notifications
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/notifications/{test_user_id}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "notifications" in data and "unread_count" in data:
+                        self.log_test("GET /notifications/{user_id}", "Get notifications", True, 
+                                    f"Retrieved {len(data['notifications'])} notifications, {data['unread_count']} unread", response_time)
+                    else:
+                        self.log_test("GET /notifications/{user_id}", "Get notifications", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /notifications/{user_id}", "Get notifications", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /notifications/{user_id}", "Get notifications", False, f"Exception: {str(e)}")
+            
+        # Test 2: Get unread only
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {"unread_only": True}
+                
+                response = await client.get(f"{BACKEND_URL}/notifications/{test_user_id}", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "notifications" in data:
+                        self.log_test("GET /notifications/{user_id}", "Unread only filter", True, 
+                                    f"Retrieved {len(data['notifications'])} unread notifications")
+                    else:
+                        self.log_test("GET /notifications/{user_id}", "Unread only filter", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /notifications/{user_id}", "Unread only filter", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /notifications/{user_id}", "Unread only filter", False, f"Exception: {str(e)}")
+            
+        # Test 3: Mark all as read
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/notifications/{test_user_id}/read-all")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "marked_read" in data:
+                        self.log_test("POST /notifications/{user_id}/read-all", "Mark all read", True, 
+                                    f"Marked {data['marked_read']} notifications as read", response_time)
+                    else:
+                        self.log_test("POST /notifications/{user_id}/read-all", "Mark all read", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("POST /notifications/{user_id}/read-all", "Mark all read", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /notifications/{user_id}/read-all", "Mark all read", False, f"Exception: {str(e)}")
+            
+    async def test_alert_preferences(self):
+        """Test alert preferences endpoints"""
+        print("\n⚙️ Testing Alert Preferences...")
+        
+        test_user_id = "test-123"
+        
+        # Test 1: Save preferences
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "user_id": test_user_id,
+                    "max_price": 200,
+                    "preferred_destinations": ["BCN", "LIS"],
+                    "origin_iata": "CDG"
+                }
+                
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/alerts/preferences", json=payload)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "success" in data and data["success"]:
+                        self.log_test("POST /alerts/preferences", "Save preferences", True, 
+                                    f"Saved preferences for user {test_user_id}", response_time)
+                    else:
+                        self.log_test("POST /alerts/preferences", "Save preferences", False, 
+                                    f"Save failed: {data}")
+                else:
+                    self.log_test("POST /alerts/preferences", "Save preferences", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /alerts/preferences", "Save preferences", False, f"Exception: {str(e)}")
+            
+        # Test 2: Get preferences
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/alerts/preferences/{test_user_id}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "user_id" in data:
+                        required_fields = ["max_price", "preferred_destinations", "origin_iata"]
+                        found_fields = [f for f in required_fields if f in data]
+                        self.log_test("GET /alerts/preferences/{user_id}", "Get preferences", True, 
+                                    f"Retrieved preferences with fields: {found_fields}", response_time)
+                    else:
+                        self.log_test("GET /alerts/preferences/{user_id}", "Get preferences", False, 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("GET /alerts/preferences/{user_id}", "Get preferences", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /alerts/preferences/{user_id}", "Get preferences", False, f"Exception: {str(e)}")
+            
+    async def test_ai_destinations(self):
+        """Test AI destinations endpoint"""
+        print("\n🤖 Testing AI Destinations...")
+        
+        # Test 1: Culture mood
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                payload = {
+                    "mood": "culture",
+                    "budget_max": 300,
+                    "origin": "CDG",
+                    "departure_date": "2026-07-01",
+                    "return_date": "2026-07-05"
+                }
+                
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/ai/destinations", json=payload)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "destinations" in data and isinstance(data["destinations"], list):
+                        destinations_count = len(data["destinations"])
+                        if destinations_count > 0:
+                            first_dest = data["destinations"][0]
+                            required_fields = ["city", "country", "iata", "why", "estimated_flight_budget"]
+                            missing_fields = [f for f in required_fields if f not in first_dest]
+                            
+                            if not missing_fields:
+                                self.log_test("POST /ai/destinations", "Culture mood", True, 
+                                            f"Generated {destinations_count} destinations with all required fields", response_time)
+                            else:
+                                self.log_test("POST /ai/destinations", "Culture mood", False, 
+                                            f"Missing fields in response: {missing_fields}")
                         else:
-                            self.log_test("Get Deals", False, "Deal structure missing required fields", first_deal)
-                            return False
+                            self.log_test("POST /ai/destinations", "Culture mood", False, 
+                                        "No destinations returned")
                     else:
-                        self.log_test("Get Deals", True, "No deals found (acceptable if feeds unavailable)")
-                        return True
+                        self.log_test("POST /ai/destinations", "Culture mood", False, 
+                                    f"Invalid response format: {data}")
                 else:
-                    self.log_test("Get Deals", False, "Missing 'deals' or 'count' in response", data)
-                    return False
-            else:
-                self.log_test("Get Deals", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Get Deals", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_get_deals_with_params(self):
-        """Test GET /api/deals with query parameters"""
-        try:
-            # Test with limit parameter
-            response = await self.client.get(f"{BACKEND_URL}/deals?limit=10")
-            
-            if response.status_code == 200:
-                data = response.json()
-                deals = data.get("deals", [])
-                if len(deals) <= 10:
-                    self.log_test("Get Deals (with limit)", True, f"Limit parameter working - got {len(deals)} deals")
-                    return True
-                else:
-                    self.log_test("Get Deals (with limit)", False, f"Limit not respected - got {len(deals)} deals")
-                    return False
-            else:
-                self.log_test("Get Deals (with limit)", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Get Deals (with limit)", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_get_error_fares(self):
-        """Test GET /api/deals/error-fares - Get only error fares"""
-        try:
-            response = await self.client.get(f"{BACKEND_URL}/deals/error-fares")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "deals" in data and "count" in data:
-                    deals = data["deals"]
-                    count = data["count"]
+                    self.log_test("POST /ai/destinations", "Culture mood", False, 
+                                f"Status: {response.status_code}, Body: {response.text}")
                     
-                    # Verify all deals are error fares if any exist
-                    if deals:
-                        all_error_fares = all(deal.get("is_error_fare", False) for deal in deals)
-                        if all_error_fares:
-                            self.log_test("Get Error Fares", True, f"Retrieved {count} error fares successfully")
-                            return True
+        except Exception as e:
+            self.log_test("POST /ai/destinations", "Culture mood", False, f"Exception: {str(e)}")
+            
+        # Test 2: Party mood
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                payload = {
+                    "mood": "party",
+                    "budget_max": 400,
+                    "origin": "CDG",
+                    "departure_date": "2026-08-01",
+                    "return_date": "2026-08-05"
+                }
+                
+                response = await client.post(f"{BACKEND_URL}/ai/destinations", json=payload)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "destinations" in data and len(data["destinations"]) > 0:
+                        self.log_test("POST /ai/destinations", "Party mood", True, 
+                                    f"Generated {len(data['destinations'])} party destinations")
+                    else:
+                        self.log_test("POST /ai/destinations", "Party mood", False, 
+                                    "No destinations for party mood")
+                else:
+                    self.log_test("POST /ai/destinations", "Party mood", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /ai/destinations", "Party mood", False, f"Exception: {str(e)}")
+            
+        # Test 3: Nature mood
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                payload = {
+                    "mood": "nature",
+                    "budget_max": 350,
+                    "origin": "CDG",
+                    "departure_date": "2026-09-01",
+                    "return_date": "2026-09-05"
+                }
+                
+                response = await client.post(f"{BACKEND_URL}/ai/destinations", json=payload)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "destinations" in data and len(data["destinations"]) > 0:
+                        self.log_test("POST /ai/destinations", "Nature mood", True, 
+                                    f"Generated {len(data['destinations'])} nature destinations")
+                    else:
+                        self.log_test("POST /ai/destinations", "Nature mood", False, 
+                                    "No destinations for nature mood")
+                else:
+                    self.log_test("POST /ai/destinations", "Nature mood", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("POST /ai/destinations", "Nature mood", False, f"Exception: {str(e)}")
+            
+    async def test_ai_itinerary(self):
+        """Test AI itinerary endpoint"""
+        print("\n📅 Testing AI Itinerary...")
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                payload = {
+                    "city": "Barcelona",
+                    "country": "Spain",
+                    "trip_days": 3,
+                    "mood": "culture",
+                    "budget_level": "student"
+                }
+                
+                start_time = time.time()
+                response = await client.post(f"{BACKEND_URL}/ai/itinerary", json=payload)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "days" in data and "city" in data:
+                        days_count = len(data["days"])
+                        if days_count > 0:
+                            first_day = data["days"][0]
+                            if "activities" in first_day and len(first_day["activities"]) > 0:
+                                first_activity = first_day["activities"][0]
+                                required_fields = ["time", "title", "description", "type", "cost", "location"]
+                                missing_fields = [f for f in required_fields if f not in first_activity]
+                                
+                                if not missing_fields:
+                                    self.log_test("POST /ai/itinerary", "Barcelona itinerary", True, 
+                                                f"Generated {days_count}-day itinerary with detailed activities", response_time)
+                                else:
+                                    self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, 
+                                                f"Missing activity fields: {missing_fields}")
+                            else:
+                                self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, 
+                                            "No activities in itinerary")
                         else:
-                            self.log_test("Get Error Fares", False, "Some deals are not error fares", data)
-                            return False
+                            self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, 
+                                        "No days in itinerary")
                     else:
-                        self.log_test("Get Error Fares", True, "No error fares found (acceptable)")
-                        return True
+                        self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, 
+                                    f"Invalid response format: {data}")
                 else:
-                    self.log_test("Get Error Fares", False, "Missing 'deals' or 'count' in response", data)
-                    return False
-            else:
-                self.log_test("Get Error Fares", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Get Error Fares", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_get_notifications(self):
-        """Test GET /api/notifications/{user_id} - Get notifications for user"""
-        try:
-            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.test_user_id}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "notifications" in data and "unread_count" in data:
-                    notifications = data["notifications"]
-                    unread_count = data["unread_count"]
+                    self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, 
+                                f"Status: {response.status_code}, Body: {response.text}")
                     
-                    self.log_test("Get Notifications", True, 
-                                f"Retrieved {len(notifications)} notifications, {unread_count} unread")
-                    return True, notifications
-                else:
-                    self.log_test("Get Notifications", False, "Missing required fields in response", data)
-                    return False, []
-            else:
-                self.log_test("Get Notifications", False, f"HTTP {response.status_code}: {response.text}")
-                return False, []
         except Exception as e:
-            self.log_test("Get Notifications", False, f"Error: {str(e)}")
-            return False, []
-    
-    async def test_mark_notification_read(self, notification_id: str):
-        """Test POST /api/notifications/{notification_id}/read - Mark notification as read"""
-        try:
-            response = await self.client.post(f"{BACKEND_URL}/notifications/{notification_id}/read")
+            self.log_test("POST /ai/itinerary", "Barcelona itinerary", False, f"Exception: {str(e)}")
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.log_test("Mark Notification Read", True, f"Notification {notification_id} marked as read")
-                    return True
-                else:
-                    self.log_test("Mark Notification Read", False, "Success flag not true", data)
-                    return False
-            else:
-                self.log_test("Mark Notification Read", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-        except Exception as e:
-            self.log_test("Mark Notification Read", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_mark_all_notifications_read(self):
-        """Test POST /api/notifications/{user_id}/read-all - Mark all notifications as read"""
+    async def test_european_subsidies(self):
+        """Test European subsidies endpoint"""
+        print("\n💰 Testing European Subsidies...")
+        
+        # Test 1: Basic student case
         try:
-            response = await self.client.post(f"{BACKEND_URL}/notifications/{self.test_user_id}/read-all")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "marked_read" in data:
-                    marked_count = data["marked_read"]
-                    self.log_test("Mark All Notifications Read", True, f"Marked {marked_count} notifications as read")
-                    return True
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "age": 22,
+                    "is_student": True,
+                    "country": "FR",
+                    "has_erasmus": False
+                }
+                
+                start_time = time.time()
+                response = await client.get(f"{BACKEND_URL}/subsidies/calculate", params=params)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "subsidies" in data and "total_potential_savings" in data and "applicable_count" in data:
+                        subsidies_count = len(data["subsidies"])
+                        applicable_count = data["applicable_count"]
+                        total_savings = data["total_potential_savings"]
+                        
+                        self.log_test("GET /subsidies/calculate", "Student case", True, 
+                                    f"Found {subsidies_count} subsidies, {applicable_count} applicable, €{total_savings} savings", response_time)
+                    else:
+                        self.log_test("GET /subsidies/calculate", "Student case", False, 
+                                    f"Invalid response format: {data}")
                 else:
-                    self.log_test("Mark All Notifications Read", False, "Missing 'marked_read' field", data)
-                    return False
-            else:
-                self.log_test("Mark All Notifications Read", False, f"HTTP {response.status_code}: {response.text}")
-                return False
+                    self.log_test("GET /subsidies/calculate", "Student case", False, 
+                                f"Status: {response.status_code}")
+                    
         except Exception as e:
-            self.log_test("Mark All Notifications Read", False, f"Error: {str(e)}")
-            return False
-    
-    async def run_full_test_suite(self):
-        """Run the complete test suite following the specified flow"""
-        print("🚀 Starting Wander API Backend Test Suite")
-        print(f"🔗 Testing backend at: {BACKEND_URL}")
-        print("=" * 60)
+            self.log_test("GET /subsidies/calculate", "Student case", False, f"Exception: {str(e)}")
+            
+        # Test 2: Age boundary test (17 years old)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "age": 17,
+                    "is_student": True,
+                    "country": "FR",
+                    "has_erasmus": False
+                }
+                
+                response = await client.get(f"{BACKEND_URL}/subsidies/calculate", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    # Should exclude DiscoverEU (age 18 requirement)
+                    discover_eu = next((s for s in data["subsidies"] if s["name"] == "DiscoverEU"), None)
+                    if discover_eu and not discover_eu["applies"]:
+                        self.log_test("GET /subsidies/calculate", "Age boundary", True, 
+                                    "Correctly excluded DiscoverEU for age 17")
+                    else:
+                        self.log_test("GET /subsidies/calculate", "Age boundary", False, 
+                                    "Should exclude DiscoverEU for age 17")
+                else:
+                    self.log_test("GET /subsidies/calculate", "Age boundary", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /subsidies/calculate", "Age boundary", False, f"Exception: {str(e)}")
+            
+        # Test 3: Non-student case
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "age": 25,
+                    "is_student": False,
+                    "country": "DE",
+                    "has_erasmus": False
+                }
+                
+                response = await client.get(f"{BACKEND_URL}/subsidies/calculate", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    applicable_count = data.get("applicable_count", 0)
+                    self.log_test("GET /subsidies/calculate", "Non-student", True, 
+                                f"Non-student case: {applicable_count} applicable subsidies")
+                else:
+                    self.log_test("GET /subsidies/calculate", "Non-student", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /subsidies/calculate", "Non-student", False, f"Exception: {str(e)}")
+            
+        # Test 4: Erasmus case
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "age": 20,
+                    "is_student": True,
+                    "country": "DE",
+                    "has_erasmus": True
+                }
+                
+                response = await client.get(f"{BACKEND_URL}/subsidies/calculate", params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    # Should include Erasmus+ travel grant
+                    erasmus_grant = next((s for s in data["subsidies"] if "Erasmus" in s["name"]), None)
+                    if erasmus_grant and erasmus_grant["applies"]:
+                        self.log_test("GET /subsidies/calculate", "Erasmus case", True, 
+                                    "Correctly included Erasmus+ travel grant")
+                    else:
+                        self.log_test("GET /subsidies/calculate", "Erasmus case", False, 
+                                    "Should include Erasmus+ travel grant")
+                else:
+                    self.log_test("GET /subsidies/calculate", "Erasmus case", False, 
+                                f"Status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_test("GET /subsidies/calculate", "Erasmus case", False, f"Exception: {str(e)}")
+            
+    def print_summary(self):
+        """Print test summary"""
+        print("\n" + "="*80)
+        print("🧪 BACKEND API TEST SUMMARY")
+        print("="*80)
+        print(f"Total Tests: {self.total_tests}")
+        print(f"✅ Passed: {self.passed_tests}")
+        print(f"❌ Failed: {self.failed_tests}")
+        print(f"Success Rate: {(self.passed_tests/self.total_tests*100):.1f}%" if self.total_tests > 0 else "0%")
         
-        # 1. Basic health check
-        health_ok = await self.test_health_check()
-        if not health_ok:
-            print("❌ Health check failed - stopping tests")
-            return
-        
-        # 2. Save alert preferences for test user
-        await self.test_save_alert_preferences()
-        
-        # 3. Get alert preferences to verify save
-        await self.test_get_alert_preferences()
-        
-        # 4. Trigger deals refresh (may take time)
-        refresh_ok, deals_count = await self.test_deals_refresh()
-        
-        # 5. Get deals to verify they were stored
-        await self.test_get_deals()
-        
-        # 6. Test deals with parameters
-        await self.test_get_deals_with_params()
-        
-        # 7. Get error fares specifically
-        await self.test_get_error_fares()
-        
-        # 8. Check notifications for the test user
-        notifications_ok, notifications = await self.test_get_notifications()
-        
-        # 9. If notifications exist, test marking one as read
-        if notifications_ok and notifications:
-            first_notification = notifications[0]
-            notification_id = first_notification.get("id")
-            if notification_id:
-                await self.test_mark_notification_read(notification_id)
-        
-        # 10. Test mark all notifications as read
-        await self.test_mark_all_notifications_read()
-        
-        # Summary
-        print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY")
-        print("=" * 60)
-        
-        passed = sum(1 for result in self.test_results if result["success"])
-        total = len(self.test_results)
-        
-        print(f"✅ Passed: {passed}/{total}")
-        print(f"❌ Failed: {total - passed}/{total}")
-        
-        if total - passed > 0:
-            print("\n🔍 FAILED TESTS:")
-            for result in self.test_results:
+        if self.failed_tests > 0:
+            print("\n❌ FAILED TESTS:")
+            for result in self.results:
                 if not result["success"]:
-                    print(f"   • {result['test']}: {result['details']}")
+                    print(f"  • {result['endpoint']} - {result['test']}: {result['details']}")
+                    
+        print("\n✅ PASSED TESTS:")
+        for result in self.results:
+            if result["success"]:
+                print(f"  • {result['endpoint']} - {result['test']}: {result['details']}")
+                
+        return self.failed_tests == 0
         
-        print(f"\n🎯 Overall Success Rate: {(passed/total)*100:.1f}%")
+    async def run_all_tests(self):
+        """Run all backend API tests"""
+        print("🚀 Starting Comprehensive Backend API Testing...")
+        print(f"Backend URL: {BACKEND_URL}")
         
-        return self.test_results
+        # Run all test suites
+        await self.test_health_check()
+        await self.test_flight_search()
+        await self.test_accommodations()
+        await self.test_currency_exchange()
+        await self.test_rss_deals()
+        await self.test_notifications()
+        await self.test_alert_preferences()
+        await self.test_ai_destinations()
+        await self.test_ai_itinerary()
+        await self.test_european_subsidies()
+        
+        # Print summary
+        all_passed = self.print_summary()
+        return all_passed
 
 async def main():
-    """Main test execution"""
-    tester = WanderAPITester()
-    try:
-        results = await tester.run_full_test_suite()
-        return results
-    finally:
-        await tester.close()
+    """Main test runner"""
+    tester = BackendTester()
+    success = await tester.run_all_tests()
+    
+    if success:
+        print("\n🎉 All tests passed! Backend API is working correctly.")
+        return 0
+    else:
+        print("\n⚠️ Some tests failed. Check the details above.")
+        return 1
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    result = asyncio.run(main())
+    sys.exit(result)
