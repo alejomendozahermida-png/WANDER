@@ -117,159 +117,66 @@ export const searchMultipleDestinations = async (
   budgetMax: number = 500,
   passportCountry?: string
 ): Promise<Destination[]> => {
-  const results: Destination[] = [];
+  console.log(`[Flights] Searching via backend: ${origin} → ${destinations.length} destinations`);
 
-  // Adjust dates for test API if needed
-  const adjusted = adjustDatesForTestApi(departureDate, returnDate);
-  console.log(`[Duffel] Searching from ${origin}, dates: ${adjusted.departure} → ${adjusted.return} (original: ${departureDate} → ${returnDate})`);
-
-  // Batch destinations in groups of 5 for faster results
-  const batchSize = 5;
-  for (let i = 0; i < destinations.length; i += batchSize) {
-    const batch = destinations.slice(i, i + batchSize);
-
-    const searchPromises = batch.map(async (destIata) => {
-      // Skip if origin equals destination
-      if (destIata === origin) return;
-
-      try {
-        const payload = {
-          data: {
-            slices: [
-              {
-                origin: origin,
-                destination: destIata,
-                departure_date: adjusted.departure,
-              },
-              {
-                origin: destIata,
-                destination: origin,
-                departure_date: adjusted.return,
-              },
-            ],
-            passengers: [{ type: 'adult' }],
-            cabin_class: 'economy',
-          },
-        };
-
-        const response = await duffelClient.post(
-          '/air/offer_requests?return_offers=true',
-          payload,
-          { timeout: 45000 }
-        );
-
-        const offers = response.data.data.offers || [];
-        console.log(`[Duffel] ${origin}→${destIata}: ${offers.length} offers`);
-
-        if (offers.length > 0) {
-          // Get cheapest offer
-          const cheapestOffer = offers.reduce((min: any, offer: any) =>
-            parseFloat(offer.total_amount) < parseFloat(min.total_amount) ? offer : min
-          );
-
-          const flightPrice = parseFloat(cheapestOffer.total_amount);
-
-          // Get city/country from Duffel response
-          const destData = cheapestOffer.slices[0]?.destination;
-          const cityName = destData?.city_name || destIata;
-          const countryCode = destData?.iata_country_code || '';
-          const countryName = COUNTRY_NAMES[countryCode] || countryCode;
-
-          // Check visa (use visa_rules if available)
-          let visaFree = true;
-          if (passportCountry) {
-            try {
-              const visaRules = require('../assets/visa_rules.json');
-              const freeCountries = visaRules[passportCountry] || [];
-              visaFree = freeCountries.includes(countryCode);
-            } catch { visaFree = true; }
-          }
-
-          // Extract rich flight details from Duffel offer
-          const extractSegments = (slice: any) => {
-            return (slice.segments || []).map((seg: any) => ({
-              airline: seg.marketing_carrier?.name || seg.operating_carrier?.name || cheapestOffer.owner?.name || 'Unknown',
-              airlineLogo: seg.marketing_carrier?.logo_symbol_url || seg.operating_carrier?.logo_symbol_url || '',
-              flightNumber: `${seg.marketing_carrier?.iata_code || ''}${seg.marketing_carrier_flight_number || ''}`,
-              departureAirport: seg.origin?.iata_code || '',
-              departureName: seg.origin?.city_name || seg.origin?.name || '',
-              departureTime: seg.departing_at || '',
-              arrivalAirport: seg.destination?.iata_code || '',
-              arrivalName: seg.destination?.city_name || seg.destination?.name || '',
-              arrivalTime: seg.arriving_at || '',
-              duration: formatDuration(seg.duration),
-              aircraft: seg.aircraft?.name || '',
-            }));
-          };
-
-          const outboundSlice = cheapestOffer.slices[0];
-          const inboundSlice = cheapestOffer.slices[1];
-
-          const flightDetails = {
-            offerId: cheapestOffer.id,
-            airline: cheapestOffer.owner?.name || 'Unknown',
-            totalPrice: Math.round(flightPrice),
-            currency: cheapestOffer.total_currency || 'EUR',
-            outbound: {
-              departure: outboundSlice?.segments?.[0]?.departing_at || '',
-              arrival: outboundSlice?.segments?.slice(-1)[0]?.arriving_at || '',
-              duration: formatDuration(outboundSlice?.duration),
-              stops: Math.max(0, (outboundSlice?.segments?.length || 1) - 1),
-              segments: extractSegments(outboundSlice),
-            },
-            inbound: inboundSlice ? {
-              departure: inboundSlice?.segments?.[0]?.departing_at || '',
-              arrival: inboundSlice?.segments?.slice(-1)[0]?.arriving_at || '',
-              duration: formatDuration(inboundSlice?.duration),
-              stops: Math.max(0, (inboundSlice?.segments?.length || 1) - 1),
-              segments: extractSegments(inboundSlice),
-            } : { departure: '', arrival: '', duration: 'N/A', stops: 0, segments: [] },
-          };
-
-          // Hotel price will be set to 0 — real price loaded from Booking.com later
-          const destination: Destination = {
-            id: destIata,
-            city: cityName,
-            country: countryName,
-            iata: destIata,
-            flightPrice: Math.round(flightPrice),
-            hotelPrice: 0, // Will be replaced with real Booking.com price
-            totalPrice: Math.round(flightPrice), // Temporary — updated after Booking.com
-            departureDate,
-            returnDate,
-            imageUrl: CITY_IMAGES[destIata] || `https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80`,
-            temperature: AVG_TEMPS[destIata] || 25,
-            flightDuration: formatDuration(outboundSlice?.duration),
-            costOfLiving: COST_OF_LIVING[destIata] || 'Medio',
-            visaFree,
-            flightDetails,
-          };
-
-          results.push(destination);
-        }
-      } catch (error: any) {
-        const errMsg = error.response?.data?.errors?.[0]?.message || error.message;
-        console.warn(`[Duffel] Error searching ${destIata}: ${errMsg}`);
-      }
+  try {
+    // Call backend which handles Duffel API (avoids CORS, keeps key secure)
+    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+    const response = await fetch(`${backendUrl}/api/flights/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin,
+        destinations,
+        departure_date: departureDate,
+        return_date: returnDate,
+        budget_max: budgetMax,
+      }),
     });
 
-    await Promise.allSettled(searchPromises);
+    const data = await response.json();
+    const flightResults = data.results || [];
+    console.log(`[Flights] Backend returned ${flightResults.length} results`);
 
-    // If we already have enough results, stop searching
-    if (results.length >= 6) break;
+    if (flightResults.length === 0) {
+      console.warn('[Flights] No results from backend');
+      return [];
+    }
+
+    // Map backend results to Destination type
+    const results: Destination[] = flightResults.map((r: any) => ({
+      id: r.iata,
+      city: r.city,
+      country: r.country,
+      iata: r.iata,
+      flightPrice: r.flightPrice,
+      hotelPrice: 0, // Will be replaced with real Booking.com price
+      totalPrice: r.flightPrice, // Temporary — updated after Booking.com
+      departureDate,
+      returnDate,
+      imageUrl: CITY_IMAGES[r.iata] || `https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80`,
+      temperature: AVG_TEMPS[r.iata] || 25,
+      flightDuration: r.flightDuration || 'N/A',
+      costOfLiving: COST_OF_LIVING[r.iata] || 'Medio',
+      visaFree: r.visaFree !== undefined ? r.visaFree : true,
+      flightDetails: r.flightDetails,
+    }));
+
+    // Sort by price
+    const sorted = results.sort((a, b) => a.totalPrice - b.totalPrice);
+    const top = sorted.slice(0, 6);
+
+    // Assign badges
+    if (top.length > 0) top[0].badge = 'cheapest';
+    if (top.length > 1) top[1].badge = 'best-value';
+    if (top.length > 2) top[2].badge = 'hidden-gem';
+
+    console.log(`[Flights] Returning ${top.length} destinations with real prices`);
+    return top;
+  } catch (error: any) {
+    console.error(`[Flights] Error calling backend: ${error.message}`);
+    return [];
   }
-
-  // Sort by price and return top 3
-  const sorted = results.sort((a, b) => a.totalPrice - b.totalPrice);
-  const top3 = sorted.slice(0, 3);
-
-  // Assign badges
-  if (top3.length > 0) top3[0].badge = 'cheapest';
-  if (top3.length > 1) top3[1].badge = 'best-value';
-  if (top3.length > 2) top3[2].badge = 'hidden-gem';
-
-  console.log(`[Duffel] Returning ${top3.length} destinations`);
-  return top3;
 };
 
 /**

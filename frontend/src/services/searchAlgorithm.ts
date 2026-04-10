@@ -408,25 +408,8 @@ export const smartSearch = async (params: SearchParams): Promise<Destination[]> 
   console.log(`[Algorithm] Duffel returned ${results.length} results with prices`);
 
   if (results.length === 0) {
-    console.warn('[Algorithm] No Duffel results, returning pre-filtered mock data');
-    // Return mock results from candidates
-    return candidates.slice(0, 3).map((c, i) => ({
-      id: c.destination.iata,
-      city: c.destination.city,
-      country: c.destination.country,
-      iata: c.destination.iata,
-      flightPrice: Math.round(estimateFlightCost(2000 + i * 1000)),
-      hotelPrice: Math.round(c.destination.costOfLivingIndex * 15 * getTripDays(params.departureDate, params.returnDate)),
-      totalPrice: 0,
-      departureDate: params.departureDate,
-      returnDate: params.returnDate,
-      imageUrl: c.destination.imageUrl,
-      temperature: c.destination.avgTemps[getSeason(params.departureDate)],
-      flightDuration: 'N/A',
-      costOfLiving: getCostLabel(c.destination.costOfLivingIndex),
-      visaFree: c.visaStatus === 'free',
-      badge: i === 0 ? 'cheapest' as const : i === 1 ? 'best-value' as const : 'hidden-gem' as const,
-    })).map(d => ({ ...d, totalPrice: d.flightPrice + d.hotelPrice }));
+    console.warn('[Algorithm] No flight results from backend - no destinations to show');
+    return [];
   }
 
   // Step 3: Score & rank
