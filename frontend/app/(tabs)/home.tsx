@@ -16,7 +16,7 @@ import { Calendar } from 'react-native-calendars';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUserStore } from '../../src/store/userStore';
 import { useSearchStore } from '../../src/store/searchStore';
-import { Colors, Spacing, BorderRadius, Typography } from '../../src/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../src/constants/theme';
 import { MOODS } from '../../src/constants/moods';
 import { TRENDING_DESTINATIONS } from '../../src/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,13 +115,6 @@ export default function HomeScreen() {
 
   const canSearch = departureDate && returnDate && currentMood && returnDate > departureDate;
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Buenos dias';
-    if (hour < 18) return 'Buenas tardes';
-    return 'Buenas noches';
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -132,8 +125,8 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{getGreeting()}, {user?.firstName || 'viajero'}</Text>
-            <Text style={styles.hero}>¿A donde{'\n'}vamos?</Text>
+            <Text style={styles.greeting}>Hola {user?.firstName || 'viajero'},</Text>
+            <Text style={styles.hero}>¿a donde?</Text>
           </View>
           <TouchableOpacity
             style={styles.avatar}
@@ -146,65 +139,61 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Search Card */}
-        <View style={styles.searchCard}>
-          {/* Date Row */}
-          <View style={styles.dateRow}>
+        {/* Search Form */}
+        <View style={styles.searchForm}>
+          {/* Dates */}
+          <View style={styles.dateContainer}>
             <TouchableOpacity
-              style={[styles.dateCell, departureDate && styles.dateCellFilled]}
+              style={styles.dateButton}
               onPress={() => openCalendar('departure')}
               activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={18} color={departureDate ? Colors.coral : Colors.onSurfaceDim} />
-              <View>
-                <Text style={styles.dateCellLabel}>Salida</Text>
-                <Text style={[styles.dateCellValue, departureDate && styles.dateCellValueFilled]}>
-                  {departureDate ? format(departureDate, 'dd MMM yyyy', { locale: es }) : 'Seleccionar'}
-                </Text>
-              </View>
+              <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
+              <Text style={styles.dateLabel}>Salida</Text>
+              <Text style={styles.dateValue}>
+                {departureDate ? format(departureDate, 'dd MMM', { locale: es }) : 'Seleccionar'}
+              </Text>
             </TouchableOpacity>
 
-            <View style={styles.dateArrow}>
-              <Ionicons name="arrow-forward" size={16} color={Colors.onSurfaceDim} />
-            </View>
+            <View style={styles.dateDivider} />
 
             <TouchableOpacity
-              style={[styles.dateCell, returnDate && styles.dateCellFilled]}
+              style={styles.dateButton}
               onPress={() => openCalendar('return')}
               activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={18} color={returnDate ? Colors.teal : Colors.onSurfaceDim} />
-              <View>
-                <Text style={styles.dateCellLabel}>Regreso</Text>
-                <Text style={[styles.dateCellValue, returnDate && { color: Colors.teal }]}>
-                  {returnDate ? format(returnDate, 'dd MMM yyyy', { locale: es }) : 'Seleccionar'}
-                </Text>
-              </View>
+              <Ionicons name="calendar-outline" size={20} color={Colors.coral} />
+              <Text style={styles.dateLabel}>Regreso</Text>
+              <Text style={styles.dateValue}>
+                {returnDate ? format(returnDate, 'dd MMM', { locale: es }) : 'Seleccionar'}
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Mood Selector */}
-          <Text style={styles.moodTitle}>¿Que mood tienes?</Text>
-          <View style={styles.moodGrid}>
-            {MOODS.slice(0, 4).map(mood => (
-              <TouchableOpacity
-                key={mood.id}
-                style={[
-                  styles.moodBtn,
-                  currentMood === mood.id && styles.moodBtnActive,
-                ]}
-                onPress={() => handleMoodSelect(mood.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-                <Text style={[
-                  styles.moodLabel,
-                  currentMood === mood.id && styles.moodLabelActive,
-                ]}>
-                  {mood.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.moodContainer}>
+            <Text style={styles.moodTitle}>Selecciona tu mood</Text>
+            <View style={styles.moodGrid}>
+              {MOODS.slice(0, 4).map(mood => (
+                <TouchableOpacity
+                  key={mood.id}
+                  style={[
+                    styles.moodButton,
+                    currentMood === mood.id && styles.moodButtonActive,
+                  ]}
+                  onPress={() => handleMoodSelect(mood.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                  <Text style={[
+                    styles.moodLabel,
+                    currentMood === mood.id && styles.moodLabelActive,
+                  ]}>
+                    {mood.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* Search Button */}
@@ -214,8 +203,8 @@ export default function HomeScreen() {
             disabled={!canSearch}
             activeOpacity={0.8}
           >
-            <Ionicons name="search" size={20} color={Colors.white} />
             <Text style={styles.searchBtnText}>Encontrar mi viaje</Text>
+            <Ionicons name="arrow-forward" size={18} color={Colors.white} />
           </TouchableOpacity>
         </View>
 
@@ -335,121 +324,100 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   headerLeft: { flex: 1 },
   greeting: {
-    fontSize: 14,
+    ...Typography.body,
     color: Colors.onSurfaceDim,
-    fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   hero: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: Colors.onSurface,
-    letterSpacing: -1,
-    lineHeight: 42,
+    ...Typography.displayMedium,
+    color: Colors.coral,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
   avatarText: {
     color: Colors.white,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
   },
 
-  // Search Card
-  searchCard: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
+  // Search Form
+  searchForm: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.xxxl,
   },
-  dateRow: {
+  dateContainer: {
     flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.pill,
+    padding: Spacing.sm,
+    marginBottom: Spacing.lg,
+    ...Shadows.small,
+  },
+  dateButton: {
+    flex: 1,
     alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  dateDivider: {
+    width: 1,
+    backgroundColor: Colors.surfaceMid,
+    marginVertical: Spacing.sm,
+  },
+  dateLabel: {
+    ...Typography.label,
+    color: Colors.onSurfaceDim,
+    fontSize: 10,
+    marginTop: Spacing.xs,
+  },
+  dateValue: {
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    marginTop: 4,
+  },
+  moodContainer: {
     marginBottom: Spacing.lg,
   },
-  dateCell: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surfaceMid,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  dateCellFilled: {
-    borderColor: 'rgba(255,77,77,0.25)',
-    backgroundColor: 'rgba(255,77,77,0.05)',
-  },
-  dateCellLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.onSurfaceDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  dateCellValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.onSurfaceDim,
-    marginTop: 2,
-  },
-  dateCellValueFilled: {
-    color: Colors.coral,
-  },
-  dateArrow: {
-    width: 28,
-    alignItems: 'center',
-  },
-
-  // Mood
   moodTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    ...Typography.bodySemibold,
     color: Colors.onSurface,
     marginBottom: Spacing.md,
   },
   moodGrid: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginBottom: Spacing.lg,
   },
-  moodBtn: {
+  moodButton: {
     flex: 1,
     aspectRatio: 1,
-    backgroundColor: Colors.surfaceMid,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  moodBtnActive: {
+  moodButtonActive: {
     backgroundColor: Colors.coral,
     borderColor: Colors.coral,
   },
   moodEmoji: {
-    fontSize: 26,
-    marginBottom: 4,
+    fontSize: 28,
+    marginBottom: Spacing.xs,
   },
   moodLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.onSurfaceDim,
+    ...Typography.bodySemibold,
+    color: Colors.onSurface,
+    fontSize: 12,
   },
   moodLabelActive: {
     color: Colors.white,
@@ -464,6 +432,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.coral,
     borderRadius: BorderRadius.pill,
     paddingVertical: 16,
+    marginTop: Spacing.md,
   },
   searchBtnDisabled: { opacity: 0.4 },
   searchBtnText: {
