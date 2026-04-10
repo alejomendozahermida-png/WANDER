@@ -851,6 +851,10 @@ async def search_flights(data: dict):
         flight_results = await asyncio.gather(*tasks, return_exceptions=True)
         for r in flight_results:
             if isinstance(r, dict) and not r.get("error"):
+                # Filter out fake "Duffel Airways" from test API
+                airline = r.get("flightDetails", {}).get("airline", "")
+                if "duffel" in airline.lower():
+                    continue
                 results.append(r)
 
     results.sort(key=lambda x: x.get("flightPrice", 99999))
