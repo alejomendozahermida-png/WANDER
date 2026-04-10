@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Linking,
   Platform,
   Image,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,10 +93,12 @@ export default function DealsScreen() {
     return `Hace ${days}d`;
   };
 
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+
   const renderDeal = ({ item }: { item: Deal }) => (
     <TouchableOpacity
       style={styles.dealCard}
-      onPress={() => item.url && Linking.openURL(item.url)}
+      onPress={() => setSelectedDeal(item)}
       activeOpacity={0.7}
     >
       <View style={styles.dealHeader}>
@@ -212,6 +215,91 @@ export default function DealsScreen() {
           </View>
         }
       />
+
+      {/* Deal Detail Modal */}
+      <Modal
+        visible={!!selectedDeal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedDeal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setSelectedDeal(null)}
+            >
+              <Ionicons name="close" size={24} color={Colors.onSurface} />
+            </TouchableOpacity>
+
+            {selectedDeal && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {selectedDeal.image_url ? (
+                  <Image
+                    source={{ uri: selectedDeal.image_url }}
+                    style={styles.modalImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
+
+                <View style={styles.modalBody}>
+                  <View style={[styles.sourceBadge, { backgroundColor: getSourceColor(selectedDeal.source) + '20', marginBottom: Spacing.md }]}>
+                    <Ionicons name={getSourceIcon(selectedDeal.source) as any} size={14} color={getSourceColor(selectedDeal.source)} />
+                    <Text style={[styles.sourceText, { color: getSourceColor(selectedDeal.source) }]}>
+                      {selectedDeal.source.replace('_', ' ')}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.modalTitle}>{selectedDeal.title}</Text>
+
+                  {selectedDeal.price !== null && (
+                    <Text style={styles.modalPrice}>
+                      {selectedDeal.currency === 'EUR' ? '\u20ac' : '$'}{Math.round(selectedDeal.price)}
+                    </Text>
+                  )}
+
+                  {selectedDeal.destination && (
+                    <View style={styles.modalInfoRow}>
+                      <Ionicons name="location" size={18} color={Colors.coral} />
+                      <Text style={styles.modalInfoText}>Destino: {selectedDeal.destination}</Text>
+                    </View>
+                  )}
+
+                  {selectedDeal.origin && (
+                    <View style={styles.modalInfoRow}>
+                      <Ionicons name="airplane" size={18} color={Colors.teal} />
+                      <Text style={styles.modalInfoText}>Origen: {selectedDeal.origin}</Text>
+                    </View>
+                  )}
+
+                  {selectedDeal.is_error_fare && (
+                    <View style={styles.modalWarning}>
+                      <Ionicons name="flash" size={18} color="#FF9800" />
+                      <Text style={styles.modalWarningText}>
+                        Error Fare - Estos precios pueden desaparecer rapidamente. Reserva cuanto antes si te interesa.
+                      </Text>
+                    </View>
+                  )}
+
+                  {selectedDeal.tags.length > 0 && (
+                    <View style={[styles.tagsRow, { marginTop: Spacing.md }]}>
+                      {selectedDeal.tags.map((tag, i) => (
+                        <View key={i} style={styles.tagChip}>
+                          <Text style={styles.tagText}>{tag.replace('_', ' ')}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <Text style={styles.modalHint}>
+                    Busca este vuelo directamente en tu buscador favorito (Skyscanner, Google Flights) para reservar.
+                  </Text>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -397,5 +485,87 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceDim,
     marginTop: Spacing.xs,
     opacity: 0.7,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 40,
+  },
+  modalClose: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalImage: {
+    width: '100%',
+    height: 200,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  modalBody: {
+    padding: Spacing.lg,
+  },
+  modalTitle: {
+    ...Typography.h2,
+    color: Colors.onSurface,
+    fontSize: 18,
+    marginBottom: Spacing.md,
+    lineHeight: 24,
+  },
+  modalPrice: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.coral,
+    marginBottom: Spacing.lg,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  modalInfoText: {
+    ...Typography.body,
+    color: Colors.onSurface,
+    fontSize: 15,
+  },
+  modalWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  modalWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.onSurface,
+    lineHeight: 19,
+  },
+  modalHint: {
+    ...Typography.body,
+    color: Colors.onSurfaceDim,
+    fontSize: 13,
+    marginTop: Spacing.xl,
+    textAlign: 'center',
+    lineHeight: 19,
+    fontStyle: 'italic',
   },
 });

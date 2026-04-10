@@ -250,30 +250,33 @@ export default function ResultsScreen() {
               <Image
                 source={{ uri: destination.imageUrl }}
                 style={styles.cardImage}
+                defaultSource={require('../assets/images/icon.png')}
               />
+              {/* Fallback background if image doesn't load */}
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface, zIndex: -1 }]} />
               
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                locations={[0.3, 1]}
+                colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.85)']}
+                locations={[0, 0.35, 1]}
                 style={styles.gradient}
               >
-                {/* Badge - Top Left */}
-                <View style={[styles.badge, { backgroundColor: badge.color }]}>
-                  <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
-                  <Text style={styles.badgeText}>{badge.label}</Text>
+                {/* Badges Row - Top */}
+                <View style={styles.badgesRow}>
+                  <View style={[styles.badge, { backgroundColor: badge.color }]}>
+                    <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
+                    <Text style={styles.badgeText}>{badge.label}</Text>
+                  </View>
+                  {destination.budgetTag === 'stretch' && (
+                    <View style={styles.budgetStretchBadge}>
+                      <Text style={styles.budgetStretchText}>Supera tu presupuesto</Text>
+                    </View>
+                  )}
+                  {destination.budgetTag === 'worth-it' && (
+                    <View style={styles.budgetWorthBadge}>
+                      <Text style={styles.budgetWorthText}>Vale la pena</Text>
+                    </View>
+                  )}
                 </View>
-
-                {/* Budget Tag - Top Right */}
-                {destination.budgetTag === 'stretch' && (
-                  <View style={styles.budgetStretchBadge}>
-                    <Text style={styles.budgetStretchText}>Supera tu presupuesto</Text>
-                  </View>
-                )}
-                {destination.budgetTag === 'worth-it' && (
-                  <View style={styles.budgetWorthBadge}>
-                    <Text style={styles.budgetWorthText}>Vale la pena</Text>
-                  </View>
-                )}
 
                 {/* Content Container - Bottom */}
                 <View style={styles.cardContent}>
@@ -450,13 +453,16 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     justifyContent: 'space-between',
   },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    alignItems: 'center',
+  },
   cardContent: {
     marginTop: 'auto',
   },
   badge: {
-    position: 'absolute',
-    top: Spacing.lg,
-    left: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
@@ -473,9 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   budgetStretchBadge: {
-    position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
     backgroundColor: '#FF9800',
     borderRadius: 12,
     paddingHorizontal: 10,
@@ -487,9 +490,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   budgetWorthBadge: {
-    position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
     backgroundColor: '#4CAF50',
     borderRadius: 12,
     paddingHorizontal: 10,

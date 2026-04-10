@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
+  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -165,11 +165,17 @@ export default function SubsidiesScreen() {
               {subsidy.applies && (
                 <TouchableOpacity
                   style={styles.applyButton}
-                  onPress={() => Linking.openURL(subsidy.apply_url)}
+                  onPress={() => {
+                    Alert.alert(
+                      subsidy.name,
+                      `Para aplicar a ${subsidy.name}:\n\n${subsidy.description}\n\nMonto: ${subsidy.amount}\nDeadline: ${subsidy.next_deadline}\n\nBusca "${subsidy.name}" en tu navegador para mas informacion.`,
+                      [{ text: 'Entendido', style: 'default' }]
+                    );
+                  }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="open-outline" size={16} color={Colors.background} />
-                  <Text style={styles.applyButtonText}>Como aplicar</Text>
+                  <Ionicons name="information-circle" size={16} color={Colors.background} />
+                  <Text style={styles.applyButtonText}>Mas informacion</Text>
                 </TouchableOpacity>
               )}
             </View>

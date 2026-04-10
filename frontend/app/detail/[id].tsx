@@ -10,7 +10,6 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
-  Linking,
   Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -173,16 +172,16 @@ export default function DetailScreen() {
       const result = await saveTrip({
         user_id: user.id,
         destination_city: destination.city,
-        destination_iata: destination.iata,
-        destination_country: destination.country,
-        flight_price: destination.flightPrice,
-        flight_details: destination.flightDetails || null,
-        hotel_details: accommodations?.[selectedAccom] || null,
-        departure_date: destination.departureDate,
-        return_date: destination.returnDate,
+        destination_iata: destination.iata || null,
+        destination_country: destination.country || null,
+        flight_price: destination.flightPrice || null,
+        flight_details: destination.flightDetails ? JSON.parse(JSON.stringify(destination.flightDetails)) : null,
+        hotel_details: accommodations?.[selectedAccom] ? JSON.parse(JSON.stringify(accommodations[selectedAccom])) : null,
+        departure_date: destination.departureDate || null,
+        return_date: destination.returnDate || null,
         mood: null,
-        image_url: destination.imageUrl,
-        total_price: calculateTotal(),
+        image_url: destination.imageUrl || null,
+        total_price: calculateTotal() || null,
       });
 
       if (result.success) {
@@ -295,15 +294,22 @@ export default function DetailScreen() {
         {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statChip}>
-            <Text style={styles.statEmoji}>🌡️</Text>
+            <Text style={styles.statEmoji}>{'\uD83C\uDF21\uFE0F'}</Text>
             <Text style={styles.statText}>{destination.temperature || 25}°C</Text>
           </View>
+          {destination.flightDuration && destination.flightDuration !== 'N/A' ? (
+            <View style={styles.statChip}>
+              <Text style={styles.statEmoji}>{'\u2708\uFE0F'}</Text>
+              <Text style={styles.statText}>{destination.flightDuration}</Text>
+            </View>
+          ) : (
+            <View style={styles.statChip}>
+              <Text style={styles.statEmoji}>{'\u2708\uFE0F'}</Text>
+              <Text style={styles.statText}>Vuelo directo</Text>
+            </View>
+          )}
           <View style={styles.statChip}>
-            <Text style={styles.statEmoji}>✈️</Text>
-            <Text style={styles.statText}>{destination.flightDuration || '2h 30m'}</Text>
-          </View>
-          <View style={styles.statChip}>
-            <Text style={styles.statEmoji}>💶</Text>
+            <Text style={styles.statEmoji}>{'\uD83D\uDCB6'}</Text>
             <Text style={styles.statText}>{destination.costOfLiving || 'Bajo'}</Text>
           </View>
         </View>
@@ -600,7 +606,11 @@ export default function DetailScreen() {
               )}
             </>
           ) : (
-            <Text style={styles.accomEmpty}>No se encontraron alojamientos</Text>
+            <View style={styles.accomEmptyContainer}>
+              <Ionicons name="bed-outline" size={32} color={Colors.onSurfaceDim} />
+              <Text style={styles.accomEmpty}>Alojamiento no disponible para este destino</Text>
+              <Text style={styles.accomEmptyHint}>El precio se calcula con estimacion por noche</Text>
+            </View>
           )}
         </Card>
 
@@ -750,16 +760,17 @@ export default function DetailScreen() {
                     </View>
                   </View>
 
-                  {/* Book on Booking.com button */}
+                  {/* Select accommodation button (in-app) */}
                   <TouchableOpacity
                     style={styles.modalBookingBtn}
                     onPress={() => {
-                      if (modalAccom.booking_url) Linking.openURL(modalAccom.booking_url);
+                      setShowAccomModal(false);
+                      // Already selected by the tab - just close modal
                     }}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="open-outline" size={18} color="#fff" />
-                    <Text style={styles.modalBookingBtnText}>Ver en Booking.com</Text>
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                    <Text style={styles.modalBookingBtnText}>Seleccionar alojamiento</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -1282,8 +1293,19 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.onSurfaceDim,
     textAlign: 'center',
-    paddingVertical: Spacing.lg,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  accomEmptyContainer: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  accomEmptyHint: {
+    color: Colors.onSurfaceDim,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.7,
   },
   // Modal styles
   modalOverlay: {
